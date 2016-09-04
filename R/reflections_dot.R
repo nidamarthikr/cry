@@ -157,6 +157,10 @@
  col_min <- c()
  col_max <- c()
  col_id <- c()
+ colsrc_labels <- c()
+ colsrc_created <- c()
+ colsrc_id <- c()
+ colgrp <- c()
  d_project <- data.frame(id=1,pname=NA)
  d_crystal <- data.frame(id=1,cname=NA)
  d_dataset <- data.frame(id=1,dname=NA)
@@ -277,6 +281,13 @@
    col_id <- c(col_id,fields[6])
    if (messages) print(hdata)
   }
+  if (endTag == "COLSRC")
+  {
+    colsrc_labels <- c(colsrc_labels,fields[2])
+    colsrc_created <- c(colsrc_created,fields[3])
+    colsrc_id <- c(colsrc_id,fields[4])
+  }
+  if (endTag == "COLGRP") colgrp <- c(colgrp,hdata)
   if (endTag == "BATCH")
   {
    col_batch <- c(col_batch,as.integer(fields[2:length(fields)]))
@@ -306,6 +317,10 @@
  # The I() avoids values being turned into factor levels
  l_data$COLUMN <- data.frame(labels=I(col_labels),types=I(col_types),
                              min=I(col_min),max=I(col_max),id=I(col_id))
+ l_data$COLSRC <- data.frame(labels=I(colsrc_labels),
+                             created=I(colsrc_created),id=I(colsrc_id))
+ l_data$COLGRP <- colgrp
+
  l_data$BATCH <- col_batch
 
  # History
@@ -625,7 +640,8 @@
  if (hF == 1)
  {
   close(f)                  # Close connection
-  if (hData[[1]]$NCOL[3] > 0) warning("MTZ appears to be a multi-record file, but it does not include batch headers.")
+  if (hData[[1]]$NCOL[3] > 0) warning("MTZ appears to be a multi-record file,
+                                      but it does not include batch headers.")
 
   # Output data are packed in a list
   data <- list(reflections=reflnData,header=hData[[1]],batch_header=NULL)
@@ -644,9 +660,6 @@
 
  # Output data are packed in a list
  data <- list(reflections=reflnData,header=hData[[1]],batch_header=bhData)
-
- # Create "mtz" class
- #class(data) <- "mtz"
 
  return(data)
 }
@@ -778,6 +791,25 @@
                    linea[1],linea[2],linea[3],linea[4],linea[5])
   fullhdata <- paste(fullhdata,hdata,sep="")  # COLUMN
  }
+
+ # New COLSRC and COLGRP fields (when they are present)
+ if (!is.null(data[[2]]$COLSRC))
+ {
+   for (i in 1:length(data[[2]]$COLSRC[,1]))
+   {
+     linea <- c()
+     linea <- c(linea,data[[2]]$COLSRC$labels[i],data[[2]]$COLSRC$created[i],
+                data[[2]]$COLSRC$id[i])
+     hdata <- sprintf("COLSRC %-30s %27s%15s",
+                      linea[1],linea[2],linea[3])
+     fullhdata <- paste(fullhdata,hdata,sep="")  # COLSRC
+   }
+ }
+ #if (!is.null(data[[2]]$COLGRP))
+ #{
+ # # Here procedure for COLGRP
+ #}
+
  hdata <- sprintf("NDIF %8d                                                                   ",
                   data[[2]]$NDIF)
  fullhdata <- paste(fullhdata,hdata,sep="") # NDIF
@@ -948,44 +980,6 @@
   # Close connection
   close(f)
  }
-}
-
-
-#' Creates the header$COLUMN dataframe beased on the reflections dataframe
-#'
-#' When a reflections dataframe (part of the list produced by the ".readMTZ"
-#' function) has some of its columns modified, the header$COLUMN dataframe,
-#' responsible to print out the mtz data table, will have to be modified
-#' accordingly. This is what it is done by the present function, which returns
-#' the properly modified dataframe.
-#'
-#' @param cols A dataframe with 5 variables. This is normally the "COLUMN"
-#'    named column of the "header" named list produced by function ".readMTZ".
-#' @param reflections A dataframe. This is normally the "reflections" element
-#'    of the named list produced by ".readMTZ".
-#' @return A dataframe with 5 variables. These are of class 'AsIs' and of
-#'    type 'character'. Their names are 'labels', 'types', 'min', 'max' and 'id'.
-#'    Columns 'labels', 'types' and 'id' are unchanged. The only change occurs
-#'    for 'min' and 'max'.
-#' @examples
-#' print("Hello!")
-#' @export
-.amend_column_table <- function(cols,reflections)
-{
-  # Find min and max of all reflections columns
-  mmin <- apply(reflections,2,min,na.rm=TRUE)
-  mmax <- apply(reflections,2,max,na.rm=TRUE)
-
-  # Use I() on both mmin and mmax in order to align them with the
-  # corresponding columns in dataframe cols
-  mmin <- I(as.character(mmin))
-  mmax <- I(as.character(mmax))
-
-  # Replace these two columns in dataframe cols
-  cols[,3] <- mmin
-  cols[,4] <- mmax
-
-  return(cols)
 }
 
 
