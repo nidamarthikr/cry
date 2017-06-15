@@ -20,12 +20,11 @@ A named list. Each name correspond to a valid field in the mtz
 Reads and output an MTZ header
 }
 \examples{
-\dontrun{
-filename <- "path/to/a/valid/mtz/file.mtz"
-ltmp <- .readMTZHeader(filename)
+datadir <- system.file("extdata",package="cry")
+filename <- file.path(datadir,"insulin_merged.mtz")
+ltmp <- readMTZHeader(filename)
 print(names(ltmp))
 print(ltmp$CELL)
 print(ltmp$SYMM)
-}
 }
 

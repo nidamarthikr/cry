@@ -31,9 +31,9 @@ records in named lists. A third list is used, if the mtz file is an
 unmerged file, for storing batch headers.
 }
 \examples{
-\dontrun{
-filename <- "path/to/a/valid/mtz/file.mtz"
-ltmp <- .readMTZ(filename)
+datadir <- system.file("extdata",package="cry")
+filename <- file.path(datadir,"insulin_merged.mtz")
+ltmp <- readMTZ(filename)
 print(names(ltmp))
 print(class(ltmp$reflections))
 str(ltmp$reflections)
@@ -43,6 +43,5 @@ print(class(ltmp$batch_header))
 refs <- ltmp$reflections
 print(colnames(refs))
 print(range(ltmp$H))
-}
 }
 

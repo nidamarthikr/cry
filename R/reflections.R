@@ -14,13 +14,12 @@
 #' @return A named list. Each name correspond to a valid field in the mtz
 #'    header.
 #' @examples
-#' \dontrun{
-#' filename <- "path/to/a/valid/mtz/file.mtz"
-#' ltmp <- .readMTZHeader(filename)
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"insulin_merged.mtz")
+#' ltmp <- readMTZHeader(filename)
 #' print(names(ltmp))
 #' print(ltmp$CELL)
 #' print(ltmp$SYMM)
-#' }
 #' @export
 readMTZHeader <- function(filename,messages=TRUE)
 {
@@ -73,9 +72,9 @@ readMTZHeader <- function(filename,messages=TRUE)
 #'    headers are contained in the file (merged mtz), the batch_header
 #'    element is NULL.
 #' @examples
-#' \dontrun{
-#' filename <- "path/to/a/valid/mtz/file.mtz"
-#' ltmp <- .readMTZ(filename)
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"insulin_merged.mtz")
+#' ltmp <- readMTZ(filename)
 #' print(names(ltmp))
 #' print(class(ltmp$reflections))
 #' str(ltmp$reflections)
@@ -85,7 +84,6 @@ readMTZHeader <- function(filename,messages=TRUE)
 #' refs <- ltmp$reflections
 #' print(colnames(refs))
 #' print(range(ltmp$H))
-#' }
 #' @export
 readMTZ <- function(filename, messages = TRUE){
 
