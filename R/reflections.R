@@ -83,7 +83,7 @@ readMTZHeader <- function(filename,messages=TRUE)
 #'
 #' refs <- ltmp$reflections
 #' print(colnames(refs))
-#' print(range(ltmp$H))
+#' print(range(refs$H))
 #' @export
 readMTZ <- function(filename, messages = TRUE){
 

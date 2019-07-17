@@ -28,4 +28,3 @@ print(ltmp$CELL)
 print(ltmp$SYMM)
 }
 }
-

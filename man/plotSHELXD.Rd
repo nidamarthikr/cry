@@ -21,4 +21,3 @@ plot <- plotSHELXD(filenameDF)
 plot
 }
 }
-

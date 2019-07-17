@@ -23,4 +23,3 @@ plot <- plotSHELXE(filenameDF_i, filenameDF_o, message = TRUE)
 plot
 }
 }
-

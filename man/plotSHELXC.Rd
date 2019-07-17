@@ -23,4 +23,3 @@ plot <- plotSHELXC(filenameDF, var, message = TRUE)
 plot
 }
 }
-

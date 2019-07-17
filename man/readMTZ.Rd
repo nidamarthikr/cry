@@ -42,6 +42,5 @@ print(class(ltmp$batch_header))
 
 refs <- ltmp$reflections
 print(colnames(refs))
-print(range(ltmp$H))
+print(range(refs$H))
 }
-

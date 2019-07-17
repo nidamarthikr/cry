@@ -31,4 +31,3 @@ print(ltmp$SYMM)
 }
 }
 \keyword{datasets}
-
