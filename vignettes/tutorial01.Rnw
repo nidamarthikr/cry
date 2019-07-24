@@ -1,0 +1,219 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+
+\author{James Foadi \\
+        email \href{mailto:j.foadi@bath.ac.uk}{j.foadi@bath.ac.uk}}
+\date{July, 2019}
+
+\title{Tutorial 01: Read and analyse an MTZ file}
+
+%\VignetteIndexEntry{Tutorial 01}
+%\VignetteEngine{knitr::knitr}
+
+
+
+\begin{document}
+
+\maketitle
+
+\noindent Main aim of this tutorial is to load the full content of an MTZ file in the workspace, analyse and modify data, and to write the modified content into a new MTZ file.
+
+\section{Sample MTZ files in \texttt{cry}}
+Some sample files are stored as external data in this package. These are the MTZ files available with the current release.
+
+<<ch01,echo=TRUE>>=
+library(cry)
+datadir <- system.file("extdata",package="cry")
+all_files <- list.files(datadir)
+for (mtz in all_files) {
+  print(mtz)
+}
+@
+
+\noindent Let's explore the MTZ structure using "SM.mtz".
+
+
+\section{Project, crystal and dataset}
+A merged MTZ file stores reflection X-ray data in a hierarchical way. The main purpose of collecting X-ray data is to determine the 3D structure of the molecule arranged in an ordered crystallographic lattice. Reflections related to a same molecule can come from different crystals. Different datasets, corresponding to different rotation sweeps from the same crystal, can be related to a crystal. Each MTZ file can, thus, include data from several crystals, each crystal giving origin to several datasets. Normally, a single MTZ file will be part of a same project, but this does not necessarily have to be the case. In summary, the hierarchy defining each dataset is:
+\begin{center}
+\texttt{Project} $\Rightarrow$ \texttt{Crystal} $\Rightarrow$ \texttt{Dataset}
+\end{center}
+The names of the \texttt{Project}, \texttt{Crystal} and \texttt{Dataset} form a unique combination to identify each set of reflection data. The full content of an MTZ file is loaded in the workspace using the \texttt{cry} function \texttt{readMTZ}.
+
+\begin{scriptsize}
+<<ch02>>=
+fname <- file.path(datadir,mtz)  # variable mtz has value from previous for loop
+fname
+
+# By default the parameter 'messages' is set to TRUE
+lmtz <- readMTZ(filename=fname,messages=TRUE)
+@
+\end{scriptsize}
+
+\noindent When 'messages' is tagged as \texttt{TRUE}, loading the MTZ file with the \texttt{readMTZ} function automatically triggers printing of all columns in the file, including some quick statistics.\\
+\newline
+\noindent The object created by this function is a named list made of three objects called \texttt{reflections}, \texttt{header} and \texttt{batch\_header}. For the specific file we have selected in this tutorial the \texttt{batch\_header} object is \texttt{NULL} because the file is a so-called \emph{merged} reflections file in which data have already been scaled. MTZ files produced by integration programs or not having undergone scaling yet, are \emph{unmerged} files; the \texttt{batch\_header} object for unmerged files is not \texttt{NULL}, but another named list. The \texttt{header} contains important information for the data collected. This is a named list with several fields. This is the full list of names for the specific file loaded.
+
+<<ch03>>=
+length(lmtz$header)
+nm_hdr <- names(lmtz$header)
+nm_hdr[1:5]
+nm_hdr[6:10]
+nm_hdr[11:15]
+@
+
+\noindent Fields 8,9 and 10 store the information on \texttt{Project}, \texttt{Crystal} and \texttt{Dataset}. This specific file has data coming from two crystals, but it is part of a same project.
+
+<<ch04>>=
+# One project, two crystals, one dataset each crystal
+lmtz$header$PROJECT
+lmtz$header$CRYSTAL
+lmtz$header$DATASET
+@
+
+\noindent A triplet (\texttt{Project},\texttt{Crystal},\texttt{Dataset})=(HKL\_base,HKL\_base,
+HKL\_base) is included by default in any MTZ file. Thus, the file we are using contains data for the same project called "JaldoMaldo". The first dataset, "dset01", was collected from crystal "xtal01", while the second dataset, still called "dset01", was collected from crystal "xtal02". It can be also noted that each dataset has a unique \texttt{id} number; HKL\_base has \texttt{id=0}, while the other two datasets have \texttt{id} equal to 1 and 2.
+
+\section{The MTZ records (reflections)}
+The actual data are contained in the object named \texttt{reflections}. This object is a \texttt{data.frame} with as many columns as needed to store all data columns of the MTZ file. Each column bear the same name of the column of the MTZ file. From the automated output of \texttt{readMTZ} we know that there are 33 columns in this MTZ file.
+
+\begin{scriptsize}
+<<ch05>>=
+refs <- lmtz$reflections
+refs[1:5,1:6]
+refs[1:5,7:12]
+refs[1:5,13:18]
+refs[1:5,19:24]
+refs[1:5,25:30]
+refs[1:5,31:33]
+@
+\end{scriptsize}
+
+\noindent The \texttt{NaN} in some records indicate that data were not collected for the reflection with those specific Miller indices, $h,k,l$. The reason why some reflections do not correspond to data collected is that many programs need datasets to have complete resolution shells in order to be able to carry out specific tasks. The total number of records available can be worked out as subtraction between the number of rows of the \texttt{reflections data.frame} and the number of \texttt{NaN}'s.
+
+<<ch06>>=
+nrecs <- length(refs[,1])
+idx <- which(is.na(refs[,4]) & is.na(refs[,19]))
+nnas <- length(idx)
+nrefs <- nrecs-nnas
+print(c(nrecs,nnas,nrefs))
+@
+
+\noindent There appear to be, thus, \Sexpr{nrefs} valid reflections, i.e. reflections for which data have been collected.\\
+\newline
+Once data are available, all kind of operations can be performed on them. In \texttt{cry} there are several functions for crystallographic calculations. An important and useful function is \texttt{hkl\_to\_reso} which calculates the resolution of a lattice point with Miller indices \texttt{h,k,l}, in angstroms.
+
+<<ch07>>=
+# Cell parameters
+cpars <- lmtz$header$CELL
+
+# Generate resolution for all h,k,l
+resos <- hkl_to_reso(refs[,1],refs[,2],refs[,3],
+                     cpars[1],cpars[2],cpars[3],
+                     cpars[4],cpars[5],cpars[6])
+smr <- summary(resos)
+smr
+@
+
+\noindent These data have reflections with resolution between \Sexpr{sprintf("%3.1f",smr[1])} {\AA} and \Sexpr{sprintf("%5.1f",smr[6])} \AA. These reflections are not distributed uniformly in this range; spherical shells of equal width will include an increasing number of reflections as the resolution becomes higher and higher. This can be highlated using an histogram of the resolution values.
+
+\begin{center}
+<<ch08,out.width='3.2in'>>=
+hist(resos,breaks=50,xlim=c(3.5,20),
+     main="Frequency of resolutions",
+     xlab="Resolution (angstroms)")
+@
+\end{center}
+
+\section{The analysis of reflection data}
+All sorts of statistical analysis can be performed on the data, once these have been loaded in the workspace. We know, for instance, that this MTZ file is the result of two data collections from two different crystals. The intensity columns for the first crystal are labelled as \texttt{IMEAN1}, while those for the second crystal are labelled as \texttt{IMEAN2}. Are these intensities very different, say, in the resolution range between 4 {\AA} and 7 \AA? The \texttt{cry} function used for the purpose is \texttt{aveIvsRes}.
+
+\begin{center}
+<<ch09,out.width='3.2in'>>=
+idx1 <- which(!is.na(refs[,4]) & resos >= 4 & resos <= 7)
+idx2 <- which(!is.na(refs[,19]) & resos >= 4 & resos <= 7)
+imean1 <- lmtz$reflections[idx1,4]
+reso1 <- resos[idx1]
+imean2 <- refs[idx2,19]
+reso2 <- resos[idx2]
+
+# m = low resolution; M = high resolution
+ltmp1 <- aveIvsRes(20,reso1,imean1)
+ltmp2 <- aveIvsRes(20,reso2,imean2)
+
+# Graphical comparison
+m <- 0
+M <- max(ltmp1$ave,ltmp2$ave)
+plot(ltmp1$mids,ltmp1$ave,type="b",pch=16,xlab=expression(s^2),
+     ylab="<I>",ylim=c(m,M))
+points(ltmp2$mids,ltmp2$ave,type="b",pch=16,col=2)
+@
+\end{center}
+
+\noindent It seems that the two sets of intensities have similar averages. It is worth stressing that all plots involving operations in shells of resolution have $s^2\equiv 1/d^2$ as x-axis because the number of reflections increases as the square of inverse resolution.\\
+\newline
+\noindent All sorts of data analysis and data manipulation are obviously possible, once data are loaded in the workspace. Another example concerns the difference of the Bijvoet differences, i.e. the difference between $|F^{+}_h|$ and $|F^{-}_h|$. This difference is displayed in columns \texttt{DANO1} and \texttt{DANO2}. Are these values correct? This analysis provides a way to check the correctness of the software responsible to work out the anomalous differences.
+
+<<ch10>>=
+# Extract F+, F- and DANO for crystal 1
+hkl1 <- refs[,1:3]
+Fplus1 <- refs[,14]
+Fminus1 <- refs[,16]
+Dano1 <- refs[,12]
+idx <- which(!is.na(Fplus1) & !is.na(Fminus1)
+             & !is.na(Dano1))
+hkl1 <- hkl1[idx,]
+Fplus1 <- Fplus1[idx]
+Fminus1 <- Fminus1[idx]
+Dano1 <- Dano1[idx]
+
+# Extract F+, F- and DANO for crystal 2
+hkl2 <- refs[,1:3]
+Fplus2 <- refs[,29]
+Fminus2 <- refs[,31]
+Dano2 <- refs[,27]
+idx <- which(!is.na(Fplus2) & !is.na(Fminus2)
+             & !is.na(Dano2))
+hkl2 <- hkl2[idx,]
+Fplus2 <- Fplus2[idx]
+Fminus2 <- Fminus2[idx]
+Dano2 <- Dano2[idx]
+
+# Three random records for crystal 1
+set.seed(2381)
+idx <- sample(1:length(Fplus1),size=3,replace=FALSE)
+for (i in 1:3) {
+  line <- sprintf("  %3d %3d %3d    %8.3f %8.3f    %8.3f\n",
+    hkl1[idx[i],1],hkl1[idx[i],2],hkl1[idx[i],3],
+    Fplus1[idx[i]],Fminus1[idx[i]],Dano1[idx[i]])
+  cat(line)
+}
+
+# Three random records for crystal 2
+set.seed(5327)
+idx <- sample(1:length(Fplus1),size=3,replace=FALSE)
+for (i in 1:3) {
+  line <- sprintf("  %3d %3d %3d    %8.3f %8.3f    %8.3f\n",
+    hkl2[idx[i],1],hkl2[idx[i],2],hkl2[idx[i],3],
+    Fplus2[idx[i]],Fminus2[idx[i]],Dano2[idx[i]])
+  cat(line)
+}
+
+# Fplus1 - Fminus1 = Dano1
+discrepancy <- sum(abs(Fplus1-Fminus1-Dano1))
+discrepancy
+
+# Fplus2 - Fminus2 = Dano2
+discrepancy <- sum(abs(Fplus2-Fminus2-Dano2))
+discrepancy
+@
+
+\noindent The small discrepancies mean that \texttt{DANO1} and \texttt{DANO2} have been computed correctly.
+
+
+
+\end{document}
