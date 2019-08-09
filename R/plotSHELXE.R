@@ -21,6 +21,25 @@
 
 plotSHELXE <-function(filenameDF_i, filenameDF_o, message = TRUE)
 {
-  plot <- .plotSHELXD(filenameDF_i, filenameDF_o, message = TRUE)
-  return(plot)
+  # create a new column wich will be the total number of cycles
+  lcycle_i <- length(shelxE_i$CYCLE[,1])
+  lcycle_o <- length(shelxE_o$CYCLE[,1])
+  ncycle_i <- seq(1,lcycle_i)
+  ncycle_o <- seq(1,lcycle_o)
+  CYCLE_i <- cbind(shelxeDF$CYCLE, ncycle_i)
+  # Change the name of the new variable
+  names(CYCLE_i)[names(CYCLE_i) == 'ncycle_i'] <- 'ncycle'
+  CYCLE_o <- cbind(shelxE_o$CYCLE, ncycle_o)
+  names(CYCLE_o)[names(CYCLE_o) == 'ncycle_o'] <- 'ncycle'
+
+  # Since the DF can have different length, join the inverted and original DF
+  # to create a new data frame. All the column must have the same name.
+  df <- rbind(CYCLE_o, CYCLE_i)
+  df$dataset <- c(rep("Original", nrow(CYCLE_o)), rep("Inverted", nrow(CYCLE_i)))
+
+
+  # Plot Contrast vs. Cycle
+  gg <- ggplot(df, aes(ncycle, Contrast, color=dataset, group = dataset)) +
+    geom_line() + geom_point() + theme_bw() + xlab("Cycle")
+  return(gg)
 }
