@@ -20,6 +20,6 @@
 
 plotSHELXD <-function(filenameDF)
 {
-  plot <- .plotSHELXD(filenameDF, message = TRUE)
-  return(plot)
+  ggplot(filenameDF,aes(CCall,CCweak)) + geom_point() + theme_bw() +
+    xlab('CCall') + ylab('CCweak')
 }
