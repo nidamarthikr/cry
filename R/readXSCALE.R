@@ -18,7 +18,6 @@
 #' filename <- "path/to/a/valid/ahkl/file.ahkl"
 #' ltmp <- readXSCALE(filename)
 #' print(names(ltmp))
-#' print(ltmp$UNIT_CELL_CONSTANTS)
 #' }
 #' @export
 

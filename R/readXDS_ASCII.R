@@ -18,7 +18,7 @@
 #' @examples
 #' \dontrun{
 #' filename <- "path/to/a/valid/HKL/file.HKL"
-#' xds_ascii <- readXDS(filename)
+#' xds_ascii <- readXDS_ASCII(filename)
 #' }
 #' @export
 
