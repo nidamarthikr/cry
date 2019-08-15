@@ -82,6 +82,7 @@ readSHELXlog <- function(filename)
     cc_df <- as.data.frame(cc_split, col.names = "CC1_2", stringsAsFactors = FALSE)
 
     shelxc_df <- data.frame(res_df, N_data_df, Chi_sq_df, I_sig_df, Complete_df, d_sig_df, cc_df)
+    shelxc_df[,c(1,2,3,4,5,6,7)] <- sapply(shelxc_df[,c(1,2,3,4,5,6,7)], as.numeric)
     extract_data <- shelxc_df[!apply(shelxc_df == "", 1, all),]
   }
 
