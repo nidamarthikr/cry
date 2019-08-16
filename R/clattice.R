@@ -124,3 +124,242 @@ hkl_to_reso <- function(h,k,l,a,b,c,aa,bb,cc)
   d2 <- top/(b1+b2+b3+b4+b5+b6)
   return(sqrt(d2))
 }
+
+
+#' Calculates resolution, given the Miller indices
+#'
+#' @param gn A natural integer (1,2,3,...). the space group number.
+#' @return A character string, the name of the crystal system associated
+#'         with the given space group. If the input integer does not correspond
+#'         any existing space group, the function returns NULL and throws a
+#'         warning.
+#' @examples
+#' # P1 is part of the TRICLINIC system
+#' crystal_system(1)
+#'
+#' # The object returned is a string
+#' csys <- crystal_system(1)
+#' class(csys)
+#' @export
+crystal_system <- function(gn) {
+  # Given the space group number (gn), returns the crystal system
+  # bs = 1 TRICLINIC
+  # bs = 2 MONOCLINIC
+  # bs = 3 ORTHOROMBIC
+  # bs = 4 TETRAGONAL
+  # bs = 5 CUBIC
+  # bs = 6 HEXAGONAL
+  # bs = 7 TRIGONAL
+  if (gn >=   1 & gn <=   2) bs <- 1
+  if (gn >=   3 & gn <=  15) bs <- 2
+  if (gn >=  16 & gn <=  74) bs <- 3
+  if (gn >=  75 & gn <= 142) bs <- 4
+  if (gn >= 143 & gn <= 167) bs <- 7
+  if (gn >= 168 & gn <= 194) bs <- 6
+  if (gn >= 195 & gn <= 230) bs <- 5
+  if (gn < 1 | gn > 230) {
+    warning("No space group associated with this number.")
+    return(NULL)
+  }
+  bs_name <- c("TRICLINIC","MONOCLINIC","ORTHOROMBIC","TETRAGONAL","CUBIC","HEXAGONAL","TRIGONAL")
+
+  return(bs_name[bs])
+}
+
+
+#' Matrix for cell orthogonalisation (first choice)
+#'
+#' Given the cell parameters, this function returns a matrix for
+#' transforming fractional to orthogonal coordinates, corresponding
+#' to the first choice in Giacovazzo's book.
+#'
+#' @param a A real number. One of the unit cell's side lengths, in angstroms.
+#' @param b A real number. One of the unit cell's side lengths, in angstroms.
+#' @param c A real number. One of the unit cell's side lengths, in angstroms.
+#' @param aa A real number. One of the unit cell's angles, in degrees.
+#' @param bb A real number. One of the unit cell's angles, in degrees.
+#' @param cc A real number. One of the unit cell's angles, in degrees.
+#' @return A \eqn{3\times }$ matrix \eqn{M} that transforms a \eqn{3\times 1} vector of fractional
+#'         coordinates into a \eqn{3\times 1} vector of orthogonal coordinates.
+#' @examples
+#' # Fractional coordinates
+#' Xf = c(0.1,0.4,0.8)
+#'
+#' # Orthorombic unit cell
+#' M = xtal_mat01(10,40,20,90,90,90)
+#'
+#' # Cartesian coordinates
+#' Xc = M%*%Xf
+#' @export
+xtal_mat01 <- function(a,b,c,aa,bb,cc) {
+  lp <- lattice_stuff(a,b,c,aa,bb,cc)
+  m_1 <- matrix(c(a,0,0,b*lp[6],b*lp[3],0,c*lp[5],-c*lp[2]*lp[13],1/lp[9]),
+                nrow=3,ncol=3,byrow=TRUE)
+
+  return(m_1)
+}
+
+
+#' Matrix for cell orthogonalisation (second choice)
+#'
+#' Given the cell parameters, this function returns a matrix for
+#' transforming fractional to orthogonal coordinates, corresponding
+#' to the second choice in Giacovazzo's book.
+#'
+#' @param a A real number. One of the unit cell's side lengths, in angstroms.
+#' @param b A real number. One of the unit cell's side lengths, in angstroms.
+#' @param c A real number. One of the unit cell's side lengths, in angstroms.
+#' @param aa A real number. One of the unit cell's angles, in degrees.
+#' @param bb A real number. One of the unit cell's angles, in degrees.
+#' @param cc A real number. One of the unit cell's angles, in degrees.
+#' @return A \eqn{3\times }$ matrix \eqn{M} that transforms a \eqn{3\times 1} vector of fractional
+#'         coordinates into a \eqn{3\times 1} vector of orthogonal coordinates.
+#' @examples
+#' # Fractional coordinates
+#' Xf = c(0.1,0.4,0.8)
+#'
+#' # Orthorombic unit cell
+#' M = xtal_mat02(10,40,20,90,90,90)
+#'
+#' # Cartesian coordinates
+#' Xc = M%*%Xf
+#' @export
+xtal_mat02 <- function(a,b,c,aa,bb,cc) {
+  lp <- lattice_stuff(a,b,c,aa,bb,cc)
+  m_1 <- matrix(c(1/lp[7],-lp[15]/(lp[7]*lp[12]),a*lp[5],0,1/(lp[8]*lp[12]),
+                  b*lp[4],0,0,c),nrow=3,ncol=3,byrow=TRUE)
+
+  return(m_1)
+}
+
+
+#' From fractional to orthogonal coordinates
+#'
+#' This function transforms any number of fractional coordinates \eqn{(x_f,y_f,z_f)},
+#' arranged as a vector or in a matrix or data frame, into the corresponding number
+#' of orthogonal coordinates \eqn{(x,y,z)}, arranged in the same format.
+#' \enumerate{
+#' \item ochoice = 1: X axis along a; Y axis normal to a, in the (a,b) plane;
+#'              Z axis normal to X and Y (and therefore parallel to
+#'              c*).
+#' \item ochoice = 2: this is also called "Cambridge setting". The X axis is
+#'              along a*; the Y axis lies in the (a*,b*) plane; the Z
+#'              axis is, consequently, along c.
+#' }
+#'
+#' @param xyzf A vector or \eqn{n\times 3} matrix or data frame of fractional crystal coordinates.
+#' @param a A real number. One of the unit cell's side lengths, in angstroms.
+#' @param b A real number. One of the unit cell's side lengths, in angstroms.
+#' @param c A real number. One of the unit cell's side lengths, in angstroms.
+#' @param aa A real number. One of the unit cell's angles, in degrees.
+#' @param bb A real number. One of the unit cell's angles, in degrees.
+#' @param cc A real number. One of the unit cell's angles, in degrees.
+#' @param ochoice A natural integer indicating the choice of orthogonal transformation.
+#'                1 corresponds to the first choice and 2 to the second choice in
+#'                Giacovazzo's book (see \code{\link{xtal_mat01}} and \code{\link{xtal_mat02}}).
+#' @return A \eqn{n\times 3} matrix or data frame of orthogonal coordinates corresponding
+#'         to the fractional coordinates provided in the input.
+#' @examples
+#' # Matrix containing 3 fractional coordinates
+#' xyzf <- matrix(c(0.1,0.2,0.3,0.2,0.6,0.7,0.15,0.28,0.55),ncol=3,byrow=T)
+#'
+#' # Cartesian coordinates
+#' xyz <- frac_to_orth(xyzf,10,30,20,90,90,90,1)
+#' @export
+frac_to_orth <- function(xyzf, a, b, c, aa, bb, cc, ochoice=1) {
+
+  # Check xyzf object is either vector, matrix or data.frame
+  if (!is.vector(xyzf) & !is.matrix(xyzf) & !is.data.frame(xyzf))
+    stop("Input object is not of a valid type (vector, matrix or data.frame)")
+
+  # If xyzf is a vector, turn it into a matrix
+  if (is.vector(xyzf)) dim(xyzf) <- c(1,length(xyzf))
+
+  # If xyzf has less or more than 3 columns stop
+  if (dim(xyzf)[2] != 3) stop("Input object has more or less than 3 columns")
+
+  # If xyzf is a data.frame turn it into a matrix
+  if (is.data.frame(xyzf)) xyzf <- as.matrix(xyzf)
+
+  # Orthogonalization matrix
+  if (ochoice == 1) M_1 <- xtal_mat01(a,b,c,aa,bb,cc)
+  if (ochoice == 2) M_1 <- xtal_mat02(a,b,c,aa,bb,cc)
+
+  # Transformed coordinates
+  #x <- av[1]*xf+bv[1]*yf+cv[1]*zf
+  #y <- av[2]*xf+bv[2]*yf+cv[2]*zf
+  #z <- av[3]*xf+bv[3]*yf+cv[3]*zf
+  xyz <- xyzf%*%M_1
+
+  # Turn matrix back into a data frame
+  xyz <- as.data.frame(xyz)
+  colnames(xyz) <- c("x","y","z")
+
+  return(xyz)
+}
+
+
+#' From orthogonal to fractional coordinates
+#'
+#' This function transforms any number of orthogonal coordinates \eqn{(x,y,z)},
+#' arranged as a vector or in a matrix or data frame, into the corresponding number
+#' of fractional coordinates \eqn{(x_f,y_f,z_f)}, arranged in the same format.
+#' \enumerate{
+#' \item ochoice = 1: X axis along a; Y axis normal to a, in the (a,b) plane;
+#'              Z axis normal to X and Y (and therefore parallel to
+#'              c*).
+#' \item ochoice = 2: this is also called "Cambridge setting". The X axis is
+#'              along a*; the Y axis lies in the (a*,b*) plane; the Z
+#'              axis is, consequently, along c.
+#' }
+#'
+#' @param xyz A vector or \eqn{n\times 3} matrix or data frame of orthogonal crystal coordinates.
+#' @param a A real number. One of the unit cell's side lengths, in angstroms.
+#' @param b A real number. One of the unit cell's side lengths, in angstroms.
+#' @param c A real number. One of the unit cell's side lengths, in angstroms.
+#' @param aa A real number. One of the unit cell's angles, in degrees.
+#' @param bb A real number. One of the unit cell's angles, in degrees.
+#' @param cc A real number. One of the unit cell's angles, in degrees.
+#' @param ochoice A natural integer indicating the choice of orthogonal transformation.
+#'                1 corresponds to the first choice and 2 to the second choice in
+#'                Giacovazzo's book (see \code{\link{xtal_mat01}} and \code{\link{xtal_mat02}}).
+#' @return A \eqn{n\times 3} matrix or data frame of fractional coordinates corresponding
+#'         to the orthogonal coordinates provided in the input.
+#' @examples
+#' # Matrix containing 3 orthogonal coordinates
+#' xyz <- matrix(c(5, 15, 10, 2, 10, 8, 1, 1, 1),ncol=3,byrow=T)
+#'
+#' # Fractional coordinates
+#' xyzf <- orth_to_frac(xyz,10,30,20,90,90,90,1)
+#' @export
+orth_to_frac <- function(xyz,a,b,c,aa,bb,cc,ochoice=1) {
+
+  # Check xyz object is either vector, matrix or data.frame
+  if (!is.vector(xyz) & !is.matrix(xyz) & !is.data.frame(xyz))
+    stop("Input object is not of a valid type (vector, matrix or data.frame)")
+
+  # If xyz is a vector, turn it into a matrix
+  if (is.vector(xyz)) dim(xyz) <- c(1,length(xyz))
+
+  # If xyz has less or more than 3 columns stop
+  if (dim(xyz)[2] != 3) stop("Input object has more or less than 3 columns")
+
+  # If xyz is a data.frame turn it into a matrix
+  if (is.data.frame(xyz)) xyz <- as.matrix(xyz)
+
+  # Orthogonalization matrix
+  if (ochoice == 1) M_1 <- xtal_mat01(a,b,c,aa,bb,cc)
+  if (ochoice == 2) M_1 <- xtal_mat02(a,b,c,aa,bb,cc)
+
+  # Inverse matrix
+  M <- solve(M_1)
+
+  # Transform coordinates
+  xyzf <- xyz%*%M
+
+  # Turn matrix back into a data frame
+  xyzf <- as.data.frame(xyzf)
+  colnames(xyzf) <- c("xf","yf","zf")
+
+  return(xyzf)
+}

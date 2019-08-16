@@ -179,10 +179,10 @@ readMTZ <- function(filename, messages = TRUE){
 #' resos <- hkl_to_reso(hkl[,1],hkl[,2],hkl[,3],
 #'                      cpars[1],cpars[2],cpars[3],
 #'                      cpars[4],cpars[5],cpars[6])
-#' ltmp <- aveIvsRes(20,resos,II)
+#' ltmp <- avei_vs_res(20,resos,II)
 #' plot(ltmp$mids,ltmp$ave,type="b",pch=16)
 #' @export
-aveIvsRes <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
+avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
 {
   # All calculations done with reciprocal of resos
   ss <- (1/resos)^2
