@@ -30,8 +30,8 @@ readSHELXlog <- function(filename)
   logfile <- header <- scan(filename, nlines = 3, what = character(), quiet = TRUE)
   # if condition lo search for the right SHELX log file.
   #if(header[3] == grep("SHELXC", header, value = TRUE)) #&& length(header[3] != 0))
-  x <- header[3] == grep("SHELXC", header, value = TRUE)
-  if (length(x) != 0 && header[3] == grep("SHELXC", header, value = TRUE))
+  #x <- header[3] == grep("SHELXC", header, value = TRUE)
+  if (length(x) != 0 && header[3] == "SHELXC")
   {
     data <- readLines(filename)
     ## Extract all the row containg the information to be plotted.
@@ -86,8 +86,8 @@ readSHELXlog <- function(filename)
     extract_data <- shelxc_df[!apply(shelxc_df == "", 1, all),]
   }
 
-  x <- header[3] == grep("SHELXD", header, value = TRUE)
-  if (length(x) != 0 && header[3] == grep("SHELXD", header, value = TRUE))
+  #x <- header[3] == grep("SHELXD", header, value = TRUE)
+  if (length(header[3]) != 0 && header[3] == "SHELXD")
   {
     data <- readLines(filename)
     try_data<-grep("Try",data, value = TRUE)
@@ -103,8 +103,8 @@ readSHELXlog <- function(filename)
     # extract_data <-cbind(ccall_ccw[,2],ccall_ccw[,6])
     # colnames(extract_data) <- c("CCall","CCweak")
   }
-  x <- header[3] == grep("SHELXE", header, value = TRUE)
-  if (length(x) != 0 && header[3] == grep("SHELXE", header, value = TRUE))
+  #x <- header[3] == grep("SHELXE", header, value = TRUE)
+  if (length(header[3]) != 0 && header[3] == "SHELXE")
   {
 
     ### Extract cycles of autotracing ###
