@@ -2,7 +2,7 @@
 % Please edit documentation in R/clattice.R
 \name{crystal_system}
 \alias{crystal_system}
-\title{Calculates resolution, given the Miller indices}
+\title{Crystal system corresponding to given space group.}
 \usage{
 crystal_system(gn)
 }
@@ -16,7 +16,7 @@ A character string, the name of the crystal system associated
         warning.
 }
 \description{
-Calculates resolution, given the Miller indices
+Crystal system corresponding to given space group.
 }
 \examples{
 # P1 is part of the TRICLINIC system

@@ -126,7 +126,7 @@ hkl_to_reso <- function(h,k,l,a,b,c,aa,bb,cc)
 }
 
 
-#' Calculates resolution, given the Miller indices
+#' Crystal system corresponding to given space group.
 #'
 #' @param gn A natural integer (1,2,3,...). the space group number.
 #' @return A character string, the name of the crystal system associated
