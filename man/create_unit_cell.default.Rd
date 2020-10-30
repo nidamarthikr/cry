@@ -5,7 +5,7 @@
 \title{Default method for generic "create_unit_cell"}
 \usage{
 \method{create_unit_cell}{default}(a = NULL, b = NULL, c = NULL,
-  aa = NULL, bb = NULL, cc = NULL, ...)
+  aa = NULL, bb = NULL, cc = NULL)
 }
 \value{
 An object of class "unit_cell". It is a named list of length 6 whose

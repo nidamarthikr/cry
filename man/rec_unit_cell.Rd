@@ -2,7 +2,7 @@
 % Please edit documentation in R/cell_S3.R
 \name{rec_unit_cell}
 \alias{rec_unit_cell}
-\title{Constructor for an S3 object of class "rec_unit_cell".}
+\title{Constructor for an S3 object of class "rec_unit_cell.}
 \usage{
 rec_unit_cell(ar, br, cr, aar, bbr, ccr)
 }
@@ -26,8 +26,31 @@ An object of class "rec_unit_cell". It is a named list of length 6 whose
 \description{
 This represents a crystal reciprocal unit cell.
 }
+\details{
+The constructor can be used with less than the full set of six input parameters,
+to create reciprocal unit cells for the cubic, tetragonal and orthogonal systems. Objects
+of "rec_unit_cell" class can also be created with no parameters (default to a reciprocal cubic
+cell of side length 0.1 1/angstroms).
+}
 \examples{
-# Create a cubic reciprocal unit cell
-ruc1 <- rec_unit_cell(1/10,1/10,1/10,90,90,90)
-class(ruc1)
+# Create a monoclinic reciprocal unit cell
+ruc <- unit_cell(0.115,0.033,0.077,90,120,90)
+print(ruc)
+
+# Create a cubic cell (default)
+ruc <- rec_unit_cell()
+print(ruc)
+
+# Create a reciprocal cubic cell with side 1/20
+ruc <- rec_unit_cell(1/20)
+print(ruc)
+
+# Create a reciprocal tetragonal unit cell with sides 1/20 and 1/60
+ruc <- rec_unit_cell(1/20,1/60)
+print(ruc)
+
+# Create a reciprocal orthogonal unit cell
+ruc <- rec_unit_cell(1/40,1/15,1/30)
+print(uc)
+
 }
