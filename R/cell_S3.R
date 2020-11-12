@@ -564,6 +564,49 @@ create_unit_cell.rec_unit_cell <- function(ruc) {
 }
 
 
+#' Volume of a unit cell (in angstroms^3)
+#'
+#' Method of the S3 generic class "calculate_cell_volume", to calculate the
+#' volume, in cubic angstroms, of the unit cell corresponding to the input
+#' object of class "unit_cell".
+#'
+#' @param uc An object of class "unit_cell".
+#' @return A positive numeric, the volume in cubic angstroms of the unit cell
+#'  corresponding to the input.
+#' @examples
+#' # Create a monoclinic cell
+#' bt <- bravais("mP")
+#' uc <- creaate_unit_cell(bt)
+#' print(uc)
+#'
+#' # Calculate cell volume
+#' calculate_cell_volume(uc)
+#'
+#' @export
+calculate_cell_volume.unit_cell <- function(uc) {
+  # Check uc is an object of class "unit_cell"
+  if(!is(uc,"unit_cell")) {
+    stop("Input must be a valid object of class 'unit_cell'.")
+  }
+
+  # Extract unit cell parameters
+  a <- uc$a
+  b <- uc$b
+  c <- uc$c
+  aa <- uc$alpha[1]
+  bb <- uc$beta[1]
+  cc <- uc$gamma[1]
+
+  # Lattice calculations
+  ltmp <- lattice_stuff(a,b,c,aa,bb,cc)
+
+  # Volume
+  V <- ltmp[[16]]
+
+  return(V)
+}
+
+
 #' Default method for generic "create_rec_unit_cell"
 #'
 #' This method is an alternative call to "rec_unit_cell"
@@ -770,4 +813,47 @@ create_rec_unit_cell.unit_cell <- function(uc) {
   ruc <- rec_unit_cell(ar,br,cr,aar,bbr,ccr)
 
   return(ruc)
+}
+
+
+#' Volume of a reciprocal unit cell (in angstroms^(-3))
+#'
+#' Method of the S3 generic class "calculate_cell_volume", to calculate the
+#' volume, in reciprocal cubic angstroms, of the reciprocal unit cell corresponding
+#' to the input object of class "rec_unit_cell".
+#'
+#' @param ruc An object of class "rec_unit_cell".
+#' @return A positive numeric, the volume in reciprocal cubic angstroms of the
+#'  reciprocal unit cell corresponding to the input.
+#' @examples
+#' # Create a monoclinic cell and the corresponding reciprocal
+#' bt <- bravais("mP")
+#' uc <- creaate_unit_cell(bt)
+#' ruc <- create_rec_unit_cell(uc)
+#'
+#' # Calculate reciprocall cell volume
+#' calculate_cell_volume(ruc)
+#'
+#' @export
+calculate_cell_volume.rec_unit_cell <- function(ruc) {
+  # Check ruc is an object of class "rec_unit_cell"
+  if(!is(ruc,"rec_unit_cell")) {
+    stop("Input must be a valid object of class 'rec_unit_cell'.")
+  }
+
+  # Extract reciprocal cell parameters
+  ar <- ruc$ar
+  br <- ruc$br
+  cr <- ruc$cr
+  aar <- ruc$alphar[1]
+  bbr <- ruc$betar[1]
+  ccr <- ruc$gammar[1]
+
+  # Lattice calculations
+  ltmp <- lattice_stuff(ar,br,cr,aar,bbr,ccr)
+
+  # Volume
+  Vr <- ltmp[[16]]
+
+  return(Vr)
 }
