@@ -20,7 +20,8 @@ VignetteBuilder: knitr
 Encoding: UTF-8
 Depends: R (>= 3.5.0)
 Imports:
-    methods
+    methods,
+    zoo
 Suggests: 
     knitr,
     rmarkdown
