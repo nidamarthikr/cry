@@ -261,7 +261,7 @@ xtal_mat02 <- function(a,b,c,aa,bb,cc) {
 #'         to the fractional coordinates provided in the input.
 #' @examples
 #' # Matrix containing 3 fractional coordinates
-#' xyzf <- matrix(c(0.1,0.2,0.3,0.2,0.6,0.7,0.15,0.28,0.55),ncol=3,byrow=T)
+#' xyzf <- matrix(c(0.1,0.2,0.3,0.2,0.6,0.7,0.15,0.28,0.55),ncol=3,byrow=TRUE)
 #'
 #' # Cartesian coordinates
 #' xyz <- frac_to_orth(xyzf,10,30,20,90,90,90,1)
@@ -327,7 +327,7 @@ frac_to_orth <- function(xyzf, a, b, c, aa, bb, cc, ochoice=1) {
 #'         to the orthogonal coordinates provided in the input.
 #' @examples
 #' # Matrix containing 3 orthogonal coordinates
-#' xyz <- matrix(c(5, 15, 10, 2, 10, 8, 1, 1, 1),ncol=3,byrow=T)
+#' xyz <- matrix(c(5, 15, 10, 2, 10, 8, 1, 1, 1),ncol=3,byrow=TRUE)
 #'
 #' # Fractional coordinates
 #' xyzf <- orth_to_frac(xyz,10,30,20,90,90,90,1)

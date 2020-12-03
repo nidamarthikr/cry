@@ -7,6 +7,21 @@
 \method{create_rec_unit_cell}{default}(ar = NULL, br = NULL,
   cr = NULL, aar = NULL, bbr = NULL, ccr = NULL, ...)
 }
+\arguments{
+\item{ar}{A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.}
+
+\item{br}{A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.}
+
+\item{cr}{A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.}
+
+\item{aar}{A real number. One of the reciprocal unit cell's angles, in degrees.}
+
+\item{bbr}{A real number. One of the reciprocal unit cell's angles, in degrees.}
+
+\item{ccr}{A real number. One of the reciprocal unit cell's angles, in degrees.}
+
+\item{...}{Additional arguments passed to the create_rec_unit_cell methods}
+}
 \value{
 An object of class "rec_unit_cell". It is a named list of length 6 whose
         last three slots are of "angle" class.

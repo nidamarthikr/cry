@@ -4,10 +4,12 @@
 \alias{create_rec_unit_cell.bravais}
 \title{Reciprocal unit cell starting from a Bravais symbol}
 \usage{
-\method{create_rec_unit_cell}{bravais}(bt)
+\method{create_rec_unit_cell}{bravais}(ar, ...)
 }
 \arguments{
-\item{bt}{An object of class "bravais".}
+\item{ar}{An object of class "bravais".}
+
+\item{...}{Additional arguments passed to the create_rec_unit_cell methods}
 }
 \value{
 An object of class "rec_unit_cell". It is a named list of length 6 whose

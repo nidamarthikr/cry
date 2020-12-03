@@ -5,7 +5,22 @@
 \title{Default method for generic "create_unit_cell"}
 \usage{
 \method{create_unit_cell}{default}(a = NULL, b = NULL, c = NULL,
-  aa = NULL, bb = NULL, cc = NULL)
+  aa = NULL, bb = NULL, cc = NULL, ...)
+}
+\arguments{
+\item{a}{A real number. One of the unit cell's side lengths, in angstroms.}
+
+\item{b}{A real number. One of the unit cell's side lengths, in angstroms.}
+
+\item{c}{A real number. One of the unit cell's side lengths, in angstroms.}
+
+\item{aa}{A real number. One of the unit cell's angles, in degrees.}
+
+\item{bb}{A real number. One of the unit cell's angles, in degrees.}
+
+\item{cc}{A real number. One of the unit cell's angles, in degrees.}
+
+\item{...}{Additional arguments passed to the create_unit_cell methods}
 }
 \value{
 An object of class "unit_cell". It is a named list of length 6 whose

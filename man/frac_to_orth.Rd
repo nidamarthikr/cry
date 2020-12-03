@@ -44,7 +44,7 @@ of orthogonal coordinates \eqn{(x,y,z)}, arranged in the same format.
 }
 \examples{
 # Matrix containing 3 fractional coordinates
-xyzf <- matrix(c(0.1,0.2,0.3,0.2,0.6,0.7,0.15,0.28,0.55),ncol=3,byrow=T)
+xyzf <- matrix(c(0.1,0.2,0.3,0.2,0.6,0.7,0.15,0.28,0.55),ncol=3,byrow=TRUE)
 
 # Cartesian coordinates
 xyz <- frac_to_orth(xyzf,10,30,20,90,90,90,1)

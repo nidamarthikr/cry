@@ -192,10 +192,10 @@ unit_cell <- function(a=NULL,b=NULL,c=NULL,aa=NULL,bb=NULL,cc=NULL) {
 #'
 #' # Create a reciprocal orthogonal unit cell
 #' ruc <- rec_unit_cell(1/40,1/15,1/30)
-#' print(uc)
+#' print(ruc)
 #'
 #' @export
-rec_unit_cell <- function(ar,br,cr,aar,bbr,ccr) {
+rec_unit_cell <- function(ar=NULL,br=NULL,cr=NULL,aar=NULL,bbr=NULL,ccr=NULL) {
    # If one of the input parameters is NULL use default values
    if (is.null(ar) & is.null(br) & is.null(cr) &
       is.null(aar) & is.null(bbr) & is.null(ccr)) {
@@ -312,15 +312,17 @@ rec_unit_cell <- function(ar,br,cr,aar,bbr,ccr) {
 #'
 #' The values are displayed in angstroms and degrees
 #'
-#' @param x An object of class "unit_cell"
+#' @param x An object of class "unit_cell".
+#' @param ... Additional arguments passed to the print methods
 #' @examples
 #' # Create a cubic unit cell
-#' uc <- unit_cell(10,10,10,90,90,,90)
+#' uc <- unit_cell(10,10,10,90,90,90)
 #'
 #' # Display its value
 #' print(uc)
+#' @rdname print.unit_cell
 #' @export
-print.unit_cell <- function(x) {
+print.unit_cell <- function(x,...) {
   cat("This is an object of class 'unit_cell'\n")
   cat("Its sides are:\n")
   msg <- sprintf("  %10.3f , %10.3f , %10.3f    angstroms.\n",x$a,x$b,x$c)
@@ -336,15 +338,17 @@ print.unit_cell <- function(x) {
 #'
 #' The values are displayed in 1/angstroms and degrees
 #'
-#' @param x An object of class "rec_unit_cell"
+#' @param x An object of class "rec_unit_cell".
+#' @param ... Additional arguments passed to the print methods
 #' @examples
 #' # Create a cubic reciprocal unit cell
-#' ruc <- rec_unit_cell(1/10,1/10,1/10,90,90,,90)
+#' ruc <- rec_unit_cell(1/10,1/10,1/10,90,90,90)
 #'
 #' # Display its value
 #' print(ruc)
+#' @rdname print.rec_unit_cell
 #' @export
-print.rec_unit_cell <- function(x) {
+print.rec_unit_cell <- function(x,...) {
   cat("This is an object of class 'rec_unit_cell'\n")
   cat("Its sides are:\n")
   msg <- sprintf("  %10.3f , %10.3f , %10.3f    1/angstroms.\n",x$ar,x$br,x$cr)
@@ -360,6 +364,13 @@ print.rec_unit_cell <- function(x) {
 #'
 #' This method is an alternative call to "unit_cell"
 #'.
+#' @param a A real number. One of the unit cell's side lengths, in angstroms.
+#' @param b A real number. One of the unit cell's side lengths, in angstroms.
+#' @param c A real number. One of the unit cell's side lengths, in angstroms.
+#' @param aa A real number. One of the unit cell's angles, in degrees.
+#' @param bb A real number. One of the unit cell's angles, in degrees.
+#' @param cc A real number. One of the unit cell's angles, in degrees.
+#' @param ... Additional arguments passed to the create_unit_cell methods
 #' @return An object of class "unit_cell". It is a named list of length 6 whose
 #'         last three slots are of "angle" class.
 #' @examples
@@ -370,8 +381,9 @@ print.rec_unit_cell <- function(x) {
 #' @seealso
 #' \code{\link{unit_cell}}
 #'
+#' @rdname create_unit_cell.default
 #' @export
-create_unit_cell.default <- function(a=NULL,b=NULL,c=NULL,aa=NULL,bb=NULL,cc=NULL) {
+create_unit_cell.default <- function(a=NULL,b=NULL,c=NULL,aa=NULL,bb=NULL,cc=NULL,...) {
   # Makes use of all constructions in "unit_cell"
   uc <- unit_cell(a,b,c,aa,bb,cc)
 
@@ -386,7 +398,8 @@ create_unit_cell.default <- function(a=NULL,b=NULL,c=NULL,aa=NULL,bb=NULL,cc=NUL
 #' examples are "aP", "oF", etc. The cell parameters assigned are assigned
 #' randomly, but are compatible with the Bravais lattice.
 #'
-#' @param bt An object of class "bravais".
+#' @param a An object of class "bravais".
+#' @param ... Additional arguments passed to the create_unit_cell methods
 #' @return An object of class "unit_cell". It is a named list of length 6 whose
 #'         last three slots are of "angle" class.
 #' @examples
@@ -396,8 +409,10 @@ create_unit_cell.default <- function(a=NULL,b=NULL,c=NULL,aa=NULL,bb=NULL,cc=NUL
 #' uc <- create_unit_cell(bt)
 #' print(uc)
 #'
+#' @rdname create_unit_cell.bravais
 #' @export
-create_unit_cell.bravais <- function(bt) {
+create_unit_cell.bravais <- function(a,...) {
+  bt <- a
   # Check bt is an object of class "bravais"
   if(!is(bt,"bravais")) {
     stop("Input must be a valid object of class 'bravais'.")
@@ -521,18 +536,21 @@ create_unit_cell.bravais <- function(bt) {
 #' Method to create an object of class "unit_cell" starting from an object of
 #' class "rec_unit_cell".
 #'
-#' @param ruc An object of class "rec_unit_cell".
+#' @param a An object of class "rec_unit_cell".
+#' @param ... Additional arguments passed to the create_unit_cell methods
 #' @return An object of class "unit_cell". It is a named list of length 6 whose
 #'         last three slots are of "angle" class.
 #' @examples
 #' # Create a "unit_cell" object starting from a reciprocal cubic cell object
 #' ruc <- rec_unit_cell()
-#' print(uc)
-#' uc <- create_unit_cell(uc)
+#' print(ruc)
+#' uc <- create_unit_cell(ruc)
 #' print(uc)
 #'
+#' @rdname create_unit_cell.rec_unit_cell
 #' @export
-create_unit_cell.rec_unit_cell <- function(ruc) {
+create_unit_cell.rec_unit_cell <- function(a,...) {
+  ruc <- a
   # Check ruc is an object of class "rec_unit_cell"
   if(!is(ruc,"rec_unit_cell")) {
     stop("Input must be a valid object of class 'rec_unit_cell'.")
@@ -570,20 +588,23 @@ create_unit_cell.rec_unit_cell <- function(ruc) {
 #' volume, in cubic angstroms, of the unit cell corresponding to the input
 #' object of class "unit_cell".
 #'
-#' @param uc An object of class "unit_cell".
+#' @param x An object of class "unit_cell".
+#' @param ... Additional arguments passed to the calculate_cell_volume methods
 #' @return A positive numeric, the volume in cubic angstroms of the unit cell
 #'  corresponding to the input.
 #' @examples
 #' # Create a monoclinic cell
 #' bt <- bravais("mP")
-#' uc <- creaate_unit_cell(bt)
+#' uc <- create_unit_cell(bt)
 #' print(uc)
 #'
 #' # Calculate cell volume
 #' calculate_cell_volume(uc)
 #'
+#' @rdname calculate_cell_volume.unit_cell
 #' @export
-calculate_cell_volume.unit_cell <- function(uc) {
+calculate_cell_volume.unit_cell <- function(x,...) {
+  uc <- x
   # Check uc is an object of class "unit_cell"
   if(!is(uc,"unit_cell")) {
     stop("Input must be a valid object of class 'unit_cell'.")
@@ -611,6 +632,13 @@ calculate_cell_volume.unit_cell <- function(uc) {
 #'
 #' This method is an alternative call to "rec_unit_cell"
 #'.
+#' @param ar A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.
+#' @param br A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.
+#' @param cr A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.
+#' @param aar A real number. One of the reciprocal unit cell's angles, in degrees.
+#' @param bbr A real number. One of the reciprocal unit cell's angles, in degrees.
+#' @param ccr A real number. One of the reciprocal unit cell's angles, in degrees.
+#' @param ... Additional arguments passed to the create_rec_unit_cell methods
 #' @return An object of class "rec_unit_cell". It is a named list of length 6 whose
 #'         last three slots are of "angle" class.
 #' @examples
@@ -621,6 +649,7 @@ calculate_cell_volume.unit_cell <- function(uc) {
 #' @seealso
 #' \code{\link{rec_unit_cell}}
 #'
+#' @rdname create_rec_unit_cell.default
 #' @export
 create_rec_unit_cell.default <- function(ar=NULL,br=NULL,cr=NULL,aar=NULL,bbr=NULL,ccr=NULL,...) {
   # Makes use of all constructions in "rec_unit_cell"
@@ -637,7 +666,8 @@ create_rec_unit_cell.default <- function(ar=NULL,br=NULL,cr=NULL,aar=NULL,bbr=NU
 #' examples are "aP", "oF", etc. The cell parameters assigned are assigned
 #' randomly, but are compatible with the Bravais lattice.
 #'
-#' @param bt An object of class "bravais".
+#' @param ar An object of class "bravais".
+#' @param ... Additional arguments passed to the create_rec_unit_cell methods
 #' @return An object of class "rec_unit_cell". It is a named list of length 6 whose
 #'         last three slots are of "angle" class.
 #' @examples
@@ -647,8 +677,10 @@ create_rec_unit_cell.default <- function(ar=NULL,br=NULL,cr=NULL,aar=NULL,bbr=NU
 #' ruc <- create_rec_unit_cell(bt)
 #' print(ruc)
 #'
+#' @rdname create_rec_unit_cell.bravais
 #' @export
-create_rec_unit_cell.bravais <- function(bt) {
+create_rec_unit_cell.bravais <- function(ar,...) {
+  bt <- ar
   # Check bt is an object of class "bravais"
   if(!is(bt,"bravais")) {
     stop("Input must be a valid object of class 'bravais'.")
@@ -773,7 +805,8 @@ create_rec_unit_cell.bravais <- function(bt) {
 #' Method to create an object of class "rec_unit_cell" starting from an object of
 #' class "unit_cell".
 #'
-#' @param uc An object of class "unit_cell".
+#' @param ar An object of class "unit_cell".
+#' @param ... Additional arguments passed to the create_rec_unit_cell methods
 #' @return An object of class "rec_unit_cell". It is a named list of length 6 whose
 #'         last three slots are of "angle" class.
 #' @examples
@@ -783,8 +816,10 @@ create_rec_unit_cell.bravais <- function(bt) {
 #' ruc <- create_rec_unit_cell(uc)
 #' print(ruc)
 #'
+#' @rdname create_rec_unit_cell.unit_cell
 #' @export
-create_rec_unit_cell.unit_cell <- function(uc) {
+create_rec_unit_cell.unit_cell <- function(ar,...) {
+  uc <- ar
   # Check uc is an object of class "unit_cell"
   if(!is(uc,"unit_cell")) {
     stop("Input must be a valid object of class 'unit_cell'.")
@@ -822,20 +857,23 @@ create_rec_unit_cell.unit_cell <- function(uc) {
 #' volume, in reciprocal cubic angstroms, of the reciprocal unit cell corresponding
 #' to the input object of class "rec_unit_cell".
 #'
-#' @param ruc An object of class "rec_unit_cell".
+#' @param x An object of class "rec_unit_cell".
+#' @param ... Additional arguments passed to the calculate_cell_volume methods
 #' @return A positive numeric, the volume in reciprocal cubic angstroms of the
 #'  reciprocal unit cell corresponding to the input.
 #' @examples
 #' # Create a monoclinic cell and the corresponding reciprocal
 #' bt <- bravais("mP")
-#' uc <- creaate_unit_cell(bt)
+#' uc <- create_unit_cell(bt)
 #' ruc <- create_rec_unit_cell(uc)
 #'
 #' # Calculate reciprocall cell volume
 #' calculate_cell_volume(ruc)
 #'
+#' @rdname calculate_cell_volume.rec_unit_cell
 #' @export
-calculate_cell_volume.rec_unit_cell <- function(ruc) {
+calculate_cell_volume.rec_unit_cell <- function(x,...) {
+  ruc <- x
   # Check ruc is an object of class "rec_unit_cell"
   if(!is(ruc,"rec_unit_cell")) {
     stop("Input must be a valid object of class 'rec_unit_cell'.")

@@ -4,10 +4,12 @@
 \alias{create_unit_cell.bravais}
 \title{Unit cell starting from a Bravais symbol}
 \usage{
-\method{create_unit_cell}{bravais}(bt)
+\method{create_unit_cell}{bravais}(a, ...)
 }
 \arguments{
-\item{bt}{An object of class "bravais".}
+\item{a}{An object of class "bravais".}
+
+\item{...}{Additional arguments passed to the create_unit_cell methods}
 }
 \value{
 An object of class "unit_cell". It is a named list of length 6 whose
