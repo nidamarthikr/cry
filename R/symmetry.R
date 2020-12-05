@@ -193,6 +193,12 @@ extract_symmetry_info <- function(SG) {
   prima <- bini[length(bini[bini < bsg[1]])]
   dopo  <- bend[bend > bsg[1]][1]
 
+  # If symbol used is not valid, return NULL
+  if (is.na(prima) | is.na(dopo)) {
+    infostring <- NULL
+    return(infostring)
+  }
+
   # Extract info in string format
   infostring <- list()
   infostring$NUMBER       <- syminfo[prima+ 1]
@@ -241,6 +247,11 @@ extract_symmetry_info <- function(SG) {
 syminfo_to_op_xyz_list <- function(SG) {
   # Extract full symmetry information
   data <- extract_symmetry_info(SG)
+
+  # Return NULL if SG not a valid symbol
+  if (is.null(data)) {
+    return(NULL)
+  }
 
   # Extract "symop" bit
   tmp2 <- strsplit(data$SYMOP," ")
@@ -306,6 +317,23 @@ op_xyz_to_matrix <- function(op_xyz)
   # still a matrix and a vector, but the matrix is always the identity matrix.
 
   ltmp <- strsplit(op_xyz,",")
+
+  # If the split is not exactly of three fields return NULL
+  if (length(ltmp[[1]]) != 3) {
+    warning("Input is not a valid symmetry string!")
+    return(NULL)
+  }
+
+  # If the split does not contain x, y, or z, return NULL
+  flg <- FALSE
+  for (a in ltmp[[1]]) {
+    if (!grepl("x",a) & !grepl("y",a) & !grepl("z",a)) flg <- TRUE
+  }
+  if (flg) {
+    warning("Input is not a valid symmetry string!")
+    return(NULL)
+  }
+
   if (substr(ltmp[[1]][1],1,1) != "-" & substr(ltmp[[1]][1],1,1) != "+")
   {
     stmp <- paste("+",ltmp[[1]][1],sep="")
@@ -415,6 +443,11 @@ op_xyz_list_to_matrix_list <- function(op_xyz_list)
   # V2,V3,...,Cn = translation 3X1 vectors
   # C2,C3,...,Cm = centering   3X1 vectors
 
+  # Stop straight away if input is NULL
+  if (is.null(op_xyz_list)) {
+    return(NULL)
+  }
+
   # Create empty lists
   matrix_list <- list()
   vector_list <- list()
@@ -484,4 +517,245 @@ syminfo_to_matrix_list <- function(SG)
 
   # 3 functions called in one line (cool, isn't it?)
   return(op_xyz_list_to_matrix_list(syminfo_to_op_xyz_list(SG)))
+}
+
+
+#' Symmetry operations in human readable form
+#'
+#' This function returns the full set of symmetry operations in human-readable form,
+#' each one as a character string starting with 'SYMM'. These are the common crystallographic
+#' symmetry operations.
+#'
+#' @param SG A character string. The extended Hermann-Maguin symbol (e.g. 'P 1 1 21')
+#' @return Symm_string A character vector whose components are strings starting by 'SYMM'
+#'  and containing the symmetry operations of the given group in human-readable form.
+#'
+#' @examples
+#' # P1 has only one symmetry operation
+#' SG <- "P 1"
+#' symm_string <- full_symm_strings(SG)
+#' print(symm_string)
+#'
+#' # P 21 21 21 is has many more operations
+#' SG <- "P 21 21 21"
+#' symm_string <- full_symm_strings(SG)
+#' print(symm_string)
+#'
+#' @export
+full_symm_strings <- function(SG)
+{
+  # Returns all symmetry operators in string format (the kind SYMM)
+
+  # Extract all symmetry information
+  sinfo <- extract_symmetry_info(SG)
+
+  if (is.null(sinfo)) {
+    return(NULL)
+  }
+
+  # 1. Point symmetry
+  pgstring <- sinfo$SYMOP
+  npgops <- length(pgstring)
+
+  # 2. Centring
+  cstring <- sinfo$CENOP
+  ncops <- length(cstring)
+
+  # Produce npgops X ncops vectors
+  symm_string <- c()
+
+  # Double loop
+  for (ssym in pgstring)
+  {
+    # 3 character vectors for non-centring part
+    pgvec <- c("","","")
+    i <- 1
+    while (substr(ssym,i,i) != ",") i <- i+1
+    pgvec[1]<- paste(pgvec[1],substr(ssym,7,i-1),sep="")
+    ssym <- substr(ssym,i+1,nchar(ssym))
+    i <- 1
+    while (substr(ssym,i,i) != ",") i <- i+1
+    pgvec[2] <- paste(pgvec[2],substr(ssym,1,i-1),sep="")
+    ssym <- substr(ssym,i+1,nchar(ssym))
+    pgvec[3] <- paste(pgvec[3],ssym,sep="")
+    for (iscen in 1:length(cstring))
+    {
+      cnvec <- c("","","")
+      scen <- cstring[iscen]
+      if (iscen == 1)
+      {
+        symm_string <- c(symm_string,paste("symm ",pgvec[1],",  ",pgvec[2],",  ",pgvec[3],sep=""))
+      }
+      if (iscen > 1)
+      {
+        i <- 1
+        while (substr(scen,i,i) != ",") i <- i+1
+        sa <- substr(scen,7,i-1)
+        scen <- substr(scen,i+1,nchar(scen))
+        i <- 1
+        while (substr(scen,i,i) != ",") i <- i+1
+        sb <- substr(scen,1,i-1)
+        scen <- substr(scen,i+1,nchar(scen))
+        sc <- scen
+        cnvec <- c("","","")
+        if (nchar(sa) > 2 & substr(sa,2,2) == "+" | substr(sa,2,2) == "-") cnvec[1] <- substr(sa,2,nchar(sa))
+        if (nchar(sa) > 2 & substr(sa,3,3) == "+" | substr(sa,3,3) == "-") cnvec[1] <- substr(sa,3,nchar(sa))
+        if (nchar(sb) > 2 & substr(sb,2,2) == "+" | substr(sb,2,2) == "-") cnvec[2] <- substr(sb,2,nchar(sb))
+        if (nchar(sb) > 2 & substr(sb,3,3) == "+" | substr(sb,3,3) == "-") cnvec[2] <- substr(sb,3,nchar(sb))
+        if (nchar(sc) > 2 & substr(sc,2,2) == "+" | substr(sc,2,2) == "-") cnvec[3] <- substr(sc,2,nchar(sc))
+        if (nchar(sc) > 2 & substr(sc,3,3) == "+" | substr(sc,3,3) == "-") cnvec[3] <- substr(sc,3,nchar(sc))
+        symm_string <- c(symm_string,paste("symm ",pgvec[1],cnvec[1],",  ",pgvec[2],cnvec[2],",  ",pgvec[3],cnvec[3],sep=""))
+      }
+    }
+  }
+  symm_string <- toupper(symm_string)
+  for (i in 1:length(symm_string)) while(nchar(symm_string[i]) != 80) symm_string[i] <- paste(symm_string[i]," ",sep="")
+
+  return(symm_string)
+}
+
+
+#' Correct spelling for Herman-Maguin space groups symbols
+#'
+#' The commonly-used spelling of a crystallographic space group does not match the correct definition
+#' given by the Herman-Maguin symbols which define all space groups in a unique and precise way. This
+#' function attempt to translate a tentative string into a possible Herman-Maguin symbol, if it finds
+#' one. If the input string is already in the extended Herman-Maguin form, the same string is returned
+#' as output.
+#'
+#' @param sym_xHM A character string. The space group symbol in its commonly-used spelling.
+#' @return SG A character string. The extended Hermann-Maguin symbol (e.g. 'P 1 1 21').
+#'
+#' @examples
+#' # P21
+#' print(find("P 21"))
+#'
+#' # P -1
+#' print(find("P-1"))
+#'
+#' @export
+findHM <- function(sym_xHM)
+{
+  # Eliminate trailing white spaces, if any
+  sym_xHM <- trimws(sym_xHM,"both")
+
+  # Create a space after first character, if it does not exist
+  if (substr(sym_xHM,2,2) != " ") {
+    tmp <- substr(sym_xHM,2,nchar(sym_xHM))
+    sym_xHM <- paste0(substr(sym_xHM,1,1)," ",tmp)
+  }
+
+  # Try with translate_SG first
+  tmp <- translate_SG(sym_xHM,"Hall","xHM")
+  if (tmp$ans) {
+    SG <- tmp$msg
+    return(SG)
+  }
+  tmp <- translate_SG(sym_xHM,"old","xHM")
+  if (tmp$ans) {
+    SG <- tmp$msg
+    return(SG)
+  }
+  tmp <- translate_SG(sym_xHM,"xHM","xHM")
+  if (tmp$ans) {
+    SG <- tmp$msg
+    return(SG)
+  }
+
+  # Possible inputs
+  if (sym_xHM == "P 2") {
+    sym_xHM <- "P 1 2 1"
+  } else if (sym_xHM == "P 21") {
+    sym_xHM <- "P 1 21 1"
+  } else if (sym_xHM == "C 2") {
+    sym_xHM <- "C 1 2 1"
+  } else if (sym_xHM == "P m") {
+    sym_xHM <- "P 1 m 1"
+  } else if (sym_xHM == "P c") {
+    sym_xHM <- "P 1 c 1"
+  } else if (sym_xHM == "C m") {
+    sym_xHM <- "C 1 m 1"
+  } else if (sym_xHM == "C c") {
+    sym_xHM <- "C 1 c 1"
+  } else if (sym_xHM == "P 2/m") {
+    sym_xHM <- "P 1 2/m 1"
+  } else if (sym_xHM == "P 21/m") {
+    sym_xHM <- "P 1 21/m 1"
+  } else if (sym_xHM == "C 2/m") {
+    sym_xHM <- "C 1 2/m 1"
+  } else if (sym_xHM == "P 2/c") {
+    sym_xHM <- "P 1 2/c 1"
+  } else if (sym_xHM == "P 21/c") {
+    sym_xHM <- "P 1 21/c 1"
+  } else if (sym_xHM == "C 2/c") {
+    sym_xHM <- "C 1 2/c 1"
+  } else if (sym_xHM == "P n n n") {
+    sym_xHM <- "P n n n :1"
+  } else if (sym_xHM == "P b a n") {
+    sym_xHM <- "P b a n :1"
+  } else if (sym_xHM == "P m m n") {
+    sym_xHM <- "P m m n :1"
+  } else if (sym_xHM == "C c c a") {
+    sym_xHM <- "C c c a :1"
+  } else if (sym_xHM == "F d d d") {
+    sym_xHM <- "F d d d :1"
+  } else if (sym_xHM == "P 4/n") {
+    sym_xHM <- "P 4/n :1"
+  } else if (sym_xHM == "P 42/n") {
+    sym_xHM <- "P 42/n :1"
+  } else if (sym_xHM == "P 41/a") {
+    sym_xHM <- "P 41/a :1"
+  } else if (sym_xHM == "P 4/n b m") {
+    sym_xHM <- "P 4/n b m :1"
+  } else if (sym_xHM == "P 4/n n c") {
+    sym_xHM <- "P 4/n n c :1"
+  } else if (sym_xHM == "P 4/n m m") {
+    sym_xHM <- "P 4/n m m :1"
+  } else if (sym_xHM == "P 4/n c c") {
+    sym_xHM <- "P 4/n c c :1"
+  } else if (sym_xHM == "P 42/n b c") {
+    sym_xHM <- "P 42/n b c :1"
+  } else if (sym_xHM == "P 42/n n m") {
+    sym_xHM <- "P 42/n n m :1"
+  } else if (sym_xHM == "P 42/n m c") {
+    sym_xHM <- "P 42/n m c :1"
+  } else if (sym_xHM == "P 42/n c m") {
+    sym_xHM <- "P 42/n c m :1"
+  } else if (sym_xHM == "I 41/a m d") {
+    sym_xHM <- "I 41/a m d :1"
+  } else if (sym_xHM == "I 41/a c d") {
+    sym_xHM <- "I 41/a c d :1"
+  } else if (sym_xHM == "R 3") {
+    sym_xHM <- "R 3 :H"
+  } else if (sym_xHM == "H 3") {
+    sym_xHM <- "R 3 :H"
+  } else if (sym_xHM == "R -3") {
+    sym_xHM <- "R -3 :H"
+  } else if (sym_xHM == "R 3 2") {
+    sym_xHM <- "R 3 2 :H"
+  } else if (sym_xHM == "R 3 m") {
+    sym_xHM <- "R 3 m :H"
+  } else if (sym_xHM == "R 3 c") {
+    sym_xHM <- "R 3 c :H"
+  } else if (sym_xHM == "R -3 m") {
+    sym_xHM <- "R -3 m :H"
+  } else if (sym_xHM == "R -3 c") {
+    sym_xHM <- "R -3 c :H"
+  } else if (sym_xHM == "P n -3") {
+    sym_xHM <- "P n -3 :1"
+  } else if (sym_xHM == "F d -3") {
+    sym_xHM <- "F d -3 :1"
+  } else if (sym_xHM == "P n -3 n") {
+    sym_xHM <- "P n -3 n :1"
+  } else if (sym_xHM == "F d -3 m") {
+    sym_xHM <- "F d -3 m :1"
+  } else if (sym_xHM == "F d -3 c") {
+    sym_xHM <- "F d -3 c :1"
+  } else {
+    sym_xHM <- NULL
+  }
+  SG <- sym_xHM
+
+  # Returned, corrected xHM symbol
+  return(SG)
 }
