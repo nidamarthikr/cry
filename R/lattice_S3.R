@@ -20,6 +20,7 @@
 #' bt <- bravais("mS")
 #' class(bt)
 #' bt[1:4]
+#'
 #' @export
 bravais <- function(bt=NULL) {
   # When no information is given the type is "aP"

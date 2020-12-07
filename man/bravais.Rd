@@ -24,4 +24,5 @@ aP, mP, mS, oP, oS, oF, oI, tP, tI, hP, hR, cP, cF, cI
 bt <- bravais("mS")
 class(bt)
 bt[1:4]
+
 }

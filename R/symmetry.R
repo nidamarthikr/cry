@@ -52,92 +52,24 @@
 #'
 #' @export
 translate_SG <- function(value,SG_in="number",SG_out="xHM",set=1) {
-  # A few checks
-  if (SG_in != "number" & SG_in != "ccp4" & SG_in != "Hall" & SG_in != "xHM" & SG_in != "old")
-    stop("Wrong SG_in string. Valid strings are: number ccp4 Hall xHM old")
-  if (SG_out != "number" & SG_out != "ccp4" & SG_out != "Hall" & SG_out != "xHM" & SG_out != "old")
-    stop("Wrong SG_out string. Valid strings are: number ccp4 Hall xHM old")
+  # Special case in which set is not 1 and SG_in is not a number
+  if (SG_in != "number") {
+    tmp <- .translate_SG(value,SG_in,SG_out="number",set=1)
+    if (!tmp$ans) {
+      list_SG <- list(msg=tmp$msg,ans=FALSE)
 
-  # If number is not in the range 1:230 stop
-  if (SG_in == "number")
-  {
-    idx <- which(value == 1:230)
-    if (length(idx) == 0)
-    {
-      msg <- "There is not a space group associated with the input number."
-      return(list(msg=msg,ans=FALSE))
+      return(list_SG)
     }
+    tmp <- .translate_SG(tmp$msg,SG_in="number",SG_out=SG_out,set=set)
+    list_SG <- list(msg=tmp$msg,ans=tmp$ans)
+
+    return(list_SG)
   }
-
-  # If input is "number", turn into a string
-  if (SG_in == "number") value <- paste("number ",value)
-  if (SG_in == "ccp4") value <- paste("symbol ccp4",value)
-
-  # Complete string for non-number cases
-  if (SG_in == "Hall") value <- paste("symbol Hall '",value,"'",sep="")
-  if (SG_in == "xHM") value <- paste("symbol xHM  '",value,"'",sep="")
-  if (SG_in == "old") value <- paste("symbol old  '",value,"'",sep="")
-
-  # The whole content of "syminfo.lib" is already in object syminfo
-  bsg <- grep(value,syminfo,fixed=TRUE)
-
-  # Select correct one in the "number" case
-  if (SG_in == "number")
-  {
-    bsg2 <- c()
-    for (i in 1:length(bsg))
-    {
-      numero1 <- strsplit(syminfo[bsg[i]],"  ")[[1]][2]
-      numero2 <- strsplit(value,"  ")[[1]][2]
-      if (numero1 == numero2) bsg2 <- c(bsg2,bsg[i])
-    }
-    bsg <- bsg2
-    rm(bsg2)
-  }
-  #print(paste("There are ",length(bsg)," settings for this space group"))
-
-  # Select case based on set
-  if (length(bsg) < set)
-  {
-    msg <- "Something wrong in your input:"
-    msg <- paste(msg,"   1) the symbol or number input for this space group does not exist",sep="\n")
-    msg <- paste(msg,
-    "   2) if your inpur was a number, perhaps for this space group there are not that many settings",
-    sep="\n")
-    return(list(msg=msg,ans=FALSE))
-  }
-  bsg <- bsg[set]
-
-  bini <- grep("begin_spacegroup",syminfo)
-  prima <- bini[length(bini[bini < bsg])]
-  dopo  <- bini[bini > bsg][1]-1   # Add 1 for those cases when prima = dopo
-  if (SG_out == "number")
-  {
-    key <- "number"
-  }
-  if (SG_out != "number")
-  {
-    key <- paste("symbol",SG_out)
-  }
-  tmp <- syminfo[prima:dopo][grep(key,syminfo[prima:dopo])]
-  if (key == "number") translated_value <- strsplit(tmp,"  ")[[1]][2]
-  if (key != "number")
-  {
-    tmp2 <- strsplit(tmp," ")[[1]]
-    if (tmp2[2] == "ccp4") translated_value <- tmp2[3]
-    if (tmp2[2] == "Hall") translated_value <- strsplit(tmp,"'")[[1]][2]
-    if (tmp2[2] == "xHM") translated_value <- strsplit(tmp,"'")[[1]][2]
-    if (tmp2[2] == "old") translated_value <- strsplit(tmp,"'")[[1]][2]
-    rm(tmp2)
-  }
-  rm(tmp)
-
-  # If output requires number, turn character into numeric
-  if (SG_out == "number" | SG_out == "ccp4") translated_value <- as.integer(translated_value)
-  list_SG <- list(msg=translated_value,ans=TRUE)
+  list_SG <- .translate_SG(value,SG_in,SG_out,set)
 
   return(list_SG)
 }
+
 
 
 #' Information on a specific space group
@@ -758,4 +690,189 @@ findHM <- function(sym_xHM)
 
   # Returned, corrected xHM symbol
   return(SG)
+}
+
+
+#' Number of space group settings
+#'
+#' Although a space group is uniquely defined, i.e. the symmetry operations defining it
+#' is uniquely given, the choice of vectors that defines a unit cell for that symmetry
+#' is not unique. The different choices are known as settings. Most space groups have only
+#' one setting, but it is possible to find space groups with several settings. For example,
+#' "C 1 2/c 1" has 18 settings. While the xHM symbol for setting 1 is "C 1 2/c 1", the
+#' symbol for setting 2 is "A 1 2/n 1", etc.
+#'
+#' @param SG A character string or a number indicating the space group.
+#' @return nsett The number of setting for the given space group.
+#'
+#' @examples
+#' # P 1 21 1 (group number 4) has three settings
+#' num_symm_settings(4)
+#'
+#' # Find the extended Hermann-Mauguin symbols
+#' translate_SG(4,"number","xHM",1)$msg
+#' translate_SG(4,"number","xHM",2)$msg
+#' translate_SG(4,"number","xHM",3)$msg
+#'
+#' @export
+num_symm_settings <- function(SG=NULL) {
+  # Stop if no input given
+  if (is.null(SG)) {
+    stop("Space group input needed.")
+  }
+
+  # Whatever the input, turn it into a space group number
+  flg <- FALSE
+  tmp <- translate_SG(SG,"number","number")
+  if (tmp$ans) {
+    gn <- tmp$msg
+    flg <- TRUE
+  }
+  tmp <- translate_SG(SG,"ccp4","number")
+  if (tmp$ans) {
+    gn <- tmp$msg
+    flg <- TRUE
+  }
+  tmp <- translate_SG(SG,"xHM","number")
+  if (tmp$ans) {
+    gn <- tmp$msg
+    flg <- TRUE
+  }
+  tmp <- translate_SG(SG,"Hall","number")
+  if (tmp$ans) {
+    gn <- tmp$msg
+    flg <- TRUE
+  }
+  tmp <- translate_SG(SG,"old","number")
+  if (tmp$ans) {
+    gn <- tmp$msg
+    flg <- TRUE
+  }
+
+  # A last attempt, if previous have failed
+  if (!flg) {
+    tmp <- findHM(SG)
+    if (!is.null(tmp)) {
+      gn <- translate_SG(tmp,"xHM","number")
+      flg <- TRUE
+    }
+  }
+
+  # Give up!
+  if (!flg) {
+    stop("Input does not correspond to any valid space group.")
+  }
+
+  # Now cycle until no more settings for that specific space group
+  # number are found
+  nsett <- 0
+  lista <- list()
+  lista$ans <- TRUE
+  while (lista$ans)
+  {
+    nsett <- nsett+1
+    lista <- translate_SG(value=gn,SG_in="number",SG_out="xHM",set=nsett)
+  }
+  nsett <- nsett-1
+
+  return(nsett)
+}
+
+
+
+
+#---------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------
+#
+## Auxiliary functions, only used here
+#
+#---------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------
+
+.translate_SG <- function(value,SG_in="number",SG_out="xHM",set=1) {
+  # A few checks
+  if (SG_in != "number" & SG_in != "ccp4" & SG_in != "Hall" & SG_in != "xHM" & SG_in != "old")
+    stop("Wrong SG_in string. Valid strings are: number ccp4 Hall xHM old")
+  if (SG_out != "number" & SG_out != "ccp4" & SG_out != "Hall" & SG_out != "xHM" & SG_out != "old")
+    stop("Wrong SG_out string. Valid strings are: number ccp4 Hall xHM old")
+
+  # If number is not in the range 1:230 stop
+  if (SG_in == "number")
+  {
+    idx <- which(value == 1:230)
+    if (length(idx) == 0)
+    {
+      msg <- "There is not a space group associated with the input number."
+      return(list(msg=msg,ans=FALSE))
+    }
+  }
+
+  # If input is "number", turn into a string
+  if (SG_in == "number") value <- paste("number ",value)
+  if (SG_in == "ccp4") value <- paste("symbol ccp4",value)
+
+  # Complete string for non-number cases
+  if (SG_in == "Hall") value <- paste("symbol Hall '",value,"'",sep="")
+  if (SG_in == "xHM") value <- paste("symbol xHM  '",value,"'",sep="")
+  if (SG_in == "old") value <- paste("symbol old  '",value,"'",sep="")
+
+  # The whole content of "syminfo.lib" is already in object syminfo
+  bsg <- grep(value,syminfo,fixed=TRUE)
+
+  # Select correct one in the "number" case
+  if (SG_in == "number")
+  {
+    bsg2 <- c()
+    for (i in 1:length(bsg))
+    {
+      numero1 <- strsplit(syminfo[bsg[i]],"  ")[[1]][2]
+      numero2 <- strsplit(value,"  ")[[1]][2]
+      if (numero1 == numero2) bsg2 <- c(bsg2,bsg[i])
+    }
+    bsg <- bsg2
+    rm(bsg2)
+  }
+  #print(paste("There are ",length(bsg)," settings for this space group"))
+
+  # Select case based on set
+  if (length(bsg) < set)
+  {
+    msg <- "Something wrong in your input:"
+    msg <- paste(msg,"   1) the symbol or number input for this space group does not exist",sep="\n")
+    msg <- paste(msg,
+                 "   2) if your inpur was a number, perhaps for this space group there are not that many settings",
+                 sep="\n")
+    return(list(msg=msg,ans=FALSE))
+  }
+  bsg <- bsg[set]
+
+  bini <- grep("begin_spacegroup",syminfo)
+  prima <- bini[length(bini[bini < bsg])]
+  dopo  <- bini[bini > bsg][1]-1   # Add 1 for those cases when prima = dopo
+  if (SG_out == "number")
+  {
+    key <- "number"
+  }
+  if (SG_out != "number")
+  {
+    key <- paste("symbol",SG_out)
+  }
+  tmp <- syminfo[prima:dopo][grep(key,syminfo[prima:dopo])]
+  if (key == "number") translated_value <- strsplit(tmp,"  ")[[1]][2]
+  if (key != "number")
+  {
+    tmp2 <- strsplit(tmp," ")[[1]]
+    if (tmp2[2] == "ccp4") translated_value <- tmp2[3]
+    if (tmp2[2] == "Hall") translated_value <- strsplit(tmp,"'")[[1]][2]
+    if (tmp2[2] == "xHM") translated_value <- strsplit(tmp,"'")[[1]][2]
+    if (tmp2[2] == "old") translated_value <- strsplit(tmp,"'")[[1]][2]
+    rm(tmp2)
+  }
+  rm(tmp)
+
+  # If output requires number, turn character into numeric
+  if (SG_out == "number" | SG_out == "ccp4") translated_value <- as.integer(translated_value)
+  list_SG <- list(msg=translated_value,ans=TRUE)
+
+  return(list_SG)
 }
