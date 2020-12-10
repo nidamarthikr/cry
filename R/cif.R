@@ -10,13 +10,13 @@
 #'    a message highlighting what is included in the cif file.
 #' @return A named list. Each name correspond to a valid field in the cif.
 #' @examples
-#' filename <- "/path_to_file/example.cif"
-#' lcif <- readCIF(filename)
-#' print(names(lcif))
-#' print(lcif$INTRO$CELL)
-#' print(lcif$INTRO$HALL)
-#' print(lcif$INTRO$HM)
-#' print(lcif$SYMM)
+#' #filename <- "/path_to_file/example.cif"
+#' #lcif <- readCIF(filename)
+#' #print(names(lcif))
+#' #print(lcif$INTRO$CELL)
+#' #print(lcif$INTRO$HALL)
+#' #print(lcif$INTRO$HM)
+#' #print(lcif$SYMM)
 #' @export
 readCIF <- function(filename, messages=FALSE){
   f <- file(filename)

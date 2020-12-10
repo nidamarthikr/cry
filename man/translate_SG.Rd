@@ -10,7 +10,16 @@ translate_SG(value, SG_in = "number", SG_out = "xHM", set = 1)
 \item{value}{A string or an integer number corresponding to the space group being
 investigated.}
 
-\item{SG_in}{A string representing the space group format. Possible values are:
+\item{SG_in}{A string representing the space group format for the input. Possible values are:
+\itemize{
+  \item{1) "number"}
+  \item{2) "ccp4"}
+  \item{3) "Hall"}
+  \item{4) "xHM"}
+  \item{5) "old"}
+}}
+
+\item{SG_out}{A string representing the space group format for the output. Possible values are:
 \itemize{
   \item{1) "number"}
   \item{2) "ccp4"}

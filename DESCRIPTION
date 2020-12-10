@@ -19,6 +19,9 @@ suggests: knitr
 VignetteBuilder: knitr
 Encoding: UTF-8
 Depends: R (>= 3.5.0)
+Imports:
+    methods,
+    zoo
 Suggests: 
     knitr,
     rmarkdown

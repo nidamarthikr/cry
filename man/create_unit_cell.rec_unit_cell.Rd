@@ -4,10 +4,12 @@
 \alias{create_unit_cell.rec_unit_cell}
 \title{Unit cell starting from a reciprocal unit cell}
 \usage{
-\method{create_unit_cell}{rec_unit_cell}(ruc)
+\method{create_unit_cell}{rec_unit_cell}(a, ...)
 }
 \arguments{
-\item{ruc}{An object of class "rec_unit_cell".}
+\item{a}{An object of class "rec_unit_cell".}
+
+\item{...}{Additional arguments passed to the create_unit_cell methods}
 }
 \value{
 An object of class "unit_cell". It is a named list of length 6 whose
@@ -20,8 +22,8 @@ class "rec_unit_cell".
 \examples{
 # Create a "unit_cell" object starting from a reciprocal cubic cell object
 ruc <- rec_unit_cell()
-print(uc)
-uc <- create_unit_cell(uc)
+print(ruc)
+uc <- create_unit_cell(ruc)
 print(uc)
 
 }

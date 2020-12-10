@@ -4,10 +4,12 @@
 \alias{print.angle}
 \title{Print method for an object of class "angle".}
 \usage{
-\method{print}{angle}(x)
+\method{print}{angle}(x, ...)
 }
 \arguments{
-\item{x}{An object of class "angle"}
+\item{x}{An object of class "angle".}
+
+\item{...}{Additional arguments passed to the print methods}
 }
 \description{
 The value is displayed in degrees

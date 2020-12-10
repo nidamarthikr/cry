@@ -37,15 +37,17 @@ angle <- function(ang,rad_flag=TRUE) {
 #'
 #' The value is displayed in degrees
 #'
-#' @param x An object of class "angle"
+#' @param x An object of class "angle".
+#' @param ... Additional arguments passed to the print methods
 #' @examples
 #' # Create an angle of 90 degrees using radians
 #' ang1 <- angle(pi/2,FALSE)
 #'
 #' # Display its value
 #' print(ang1)
+#' @rdname print.angle
 #' @export
-print.angle <- function(x) {
+print.angle <- function(x,...) {
   print(x[1])
   invisible(x)
 }

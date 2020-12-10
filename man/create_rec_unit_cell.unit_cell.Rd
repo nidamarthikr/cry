@@ -4,10 +4,12 @@
 \alias{create_rec_unit_cell.unit_cell}
 \title{Reciprocal unit cell starting from a unit cell}
 \usage{
-\method{create_rec_unit_cell}{unit_cell}(uc)
+\method{create_rec_unit_cell}{unit_cell}(ar, ...)
 }
 \arguments{
-\item{uc}{An object of class "unit_cell".}
+\item{ar}{An object of class "unit_cell".}
+
+\item{...}{Additional arguments passed to the create_rec_unit_cell methods}
 }
 \value{
 An object of class "rec_unit_cell". It is a named list of length 6 whose

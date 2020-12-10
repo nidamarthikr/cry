@@ -4,7 +4,8 @@
 \alias{rec_unit_cell}
 \title{Constructor for an S3 object of class "rec_unit_cell.}
 \usage{
-rec_unit_cell(ar, br, cr, aar, bbr, ccr)
+rec_unit_cell(ar = NULL, br = NULL, cr = NULL, aar = NULL,
+  bbr = NULL, ccr = NULL)
 }
 \arguments{
 \item{ar}{A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.}
@@ -51,6 +52,6 @@ print(ruc)
 
 # Create a reciprocal orthogonal unit cell
 ruc <- rec_unit_cell(1/40,1/15,1/30)
-print(uc)
+print(ruc)
 
 }

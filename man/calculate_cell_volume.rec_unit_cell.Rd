@@ -4,10 +4,12 @@
 \alias{calculate_cell_volume.rec_unit_cell}
 \title{Volume of a reciprocal unit cell (in angstroms^(-3))}
 \usage{
-\method{calculate_cell_volume}{rec_unit_cell}(ruc)
+\method{calculate_cell_volume}{rec_unit_cell}(x, ...)
 }
 \arguments{
-\item{ruc}{An object of class "rec_unit_cell".}
+\item{x}{An object of class "rec_unit_cell".}
+
+\item{...}{Additional arguments passed to the calculate_cell_volume methods}
 }
 \value{
 A positive numeric, the volume in reciprocal cubic angstroms of the
@@ -21,7 +23,7 @@ to the input object of class "rec_unit_cell".
 \examples{
 # Create a monoclinic cell and the corresponding reciprocal
 bt <- bravais("mP")
-uc <- creaate_unit_cell(bt)
+uc <- create_unit_cell(bt)
 ruc <- create_rec_unit_cell(uc)
 
 # Calculate reciprocall cell volume

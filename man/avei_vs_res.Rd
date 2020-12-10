@@ -9,9 +9,19 @@ avei_vs_res(nbin, resos, II = NULL, m = max(resos), M = min(resos))
 \arguments{
 \item{nbin}{A positive integer. The number of resolution shells.}
 
+\item{resos}{A vector of real quantities. These are the resolutions (in angstroms)
+corresponding to the data vector, II. If the data vector is missing, the averages
+will be computed just for resos.}
+
 \item{II}{A vector of real quantities. This is the key quantity whose averages
 and standard deviations are calculated. If \code{II} is set to \code{NULL}, resolutions
 averages and standard deviations will be the calculated quantities.}
+
+\item{m}{Minimum (highest) resolution (in angstroms). Data with resolution smaller than m
+will be ignored when calculating the averages.}
+
+\item{M}{Maximum (lowest) resolution (in angstroms). Data with resolution larger than M
+will be ignored when calculating the averages.}
 }
 \value{
 A named list of length 4. \code{counts} is a vector of integers, the number of

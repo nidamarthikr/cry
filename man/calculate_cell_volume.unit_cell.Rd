@@ -4,10 +4,12 @@
 \alias{calculate_cell_volume.unit_cell}
 \title{Volume of a unit cell (in angstroms^3)}
 \usage{
-\method{calculate_cell_volume}{unit_cell}(uc)
+\method{calculate_cell_volume}{unit_cell}(x, ...)
 }
 \arguments{
-\item{uc}{An object of class "unit_cell".}
+\item{x}{An object of class "unit_cell".}
+
+\item{...}{Additional arguments passed to the calculate_cell_volume methods}
 }
 \value{
 A positive numeric, the volume in cubic angstroms of the unit cell
@@ -21,7 +23,7 @@ object of class "unit_cell".
 \examples{
 # Create a monoclinic cell
 bt <- bravais("mP")
-uc <- creaate_unit_cell(bt)
+uc <- create_unit_cell(bt)
 print(uc)
 
 # Calculate cell volume

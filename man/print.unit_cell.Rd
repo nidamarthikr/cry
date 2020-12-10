@@ -4,17 +4,19 @@
 \alias{print.unit_cell}
 \title{Print method for an object of class "unit_cell".}
 \usage{
-\method{print}{unit_cell}(x)
+\method{print}{unit_cell}(x, ...)
 }
 \arguments{
-\item{x}{An object of class "unit_cell"}
+\item{x}{An object of class "unit_cell".}
+
+\item{...}{Additional arguments passed to the print methods}
 }
 \description{
 The values are displayed in angstroms and degrees
 }
 \examples{
 # Create a cubic unit cell
-uc <- unit_cell(10,10,10,90,90,,90)
+uc <- unit_cell(10,10,10,90,90,90)
 
 # Display its value
 print(uc)

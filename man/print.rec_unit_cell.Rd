@@ -4,17 +4,19 @@
 \alias{print.rec_unit_cell}
 \title{Print method for an object of class "rec_unit_cell".}
 \usage{
-\method{print}{rec_unit_cell}(x)
+\method{print}{rec_unit_cell}(x, ...)
 }
 \arguments{
-\item{x}{An object of class "rec_unit_cell"}
+\item{x}{An object of class "rec_unit_cell".}
+
+\item{...}{Additional arguments passed to the print methods}
 }
 \description{
 The values are displayed in 1/angstroms and degrees
 }
 \examples{
 # Create a cubic reciprocal unit cell
-ruc <- rec_unit_cell(1/10,1/10,1/10,90,90,,90)
+ruc <- rec_unit_cell(1/10,1/10,1/10,90,90,90)
 
 # Display its value
 print(ruc)

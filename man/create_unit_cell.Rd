@@ -4,10 +4,10 @@
 \alias{create_unit_cell}
 \title{S3 generic to create unit_cell objects}
 \usage{
-create_unit_cell(x, ...)
+create_unit_cell(a, ...)
 }
 \arguments{
-\item{x}{An object used to select a method.}
+\item{a}{An object used to select a method.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }

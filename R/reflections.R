@@ -111,6 +111,10 @@ readMTZ <- function(filename, messages = TRUE){
   if (irdata[[3]] == 1) reflnData <- readBin(f, "numeric", n=numDataItems, size=4)
   if (irdata[[3]] == -1) reflnData <- readBin(f, "numeric", n=numDataItems, size=4,endian="big")
 
+  # Change "NaN" into "NA" which are properly handled in R
+  idx <- which(is.nan(reflnData))
+  if (length(idx) > 0) reflnData[idx] <- NA
+
   # Load header information
   hData <- .readH(f,messages)
   hF <- hData[[2]]                                    # hF == 1 means no batch headers
@@ -158,9 +162,16 @@ readMTZ <- function(filename, messages = TRUE){
 #' reflections, corresponding to shells of resolution.
 #'
 #' @param nbin A positive integer. The number of resolution shells.
+#' @param resos A vector of real quantities. These are the resolutions (in angstroms)
+#'  corresponding to the data vector, II. If the data vector is missing, the averages
+#'  will be computed just for resos.
 #' @param II A vector of real quantities. This is the key quantity whose averages
 #'  and standard deviations are calculated. If \code{II} is set to \code{NULL}, resolutions
 #'  averages and standard deviations will be the calculated quantities.
+#' @param m Minimum (highest) resolution (in angstroms). Data with resolution smaller than m
+#'  will be ignored when calculating the averages.
+#' @param M Maximum (lowest) resolution (in angstroms). Data with resolution larger than M
+#'  will be ignored when calculating the averages.
 #' @return A named list of length 4. \code{counts} is a vector of integers, the number of
 #'  reflections in each resolution shell. \code{mids} is the representative inverse resolution
 #'  for each resolution shell; the value is decided by the function \code{hist}. \code{ave}
