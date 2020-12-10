@@ -1,3 +1,24 @@
+#
+# This file is part of the cry package
+#
+# Functions connected to reflections data.
+
+#' Reads and output an CIF file
+#'
+#' @param filename A character string. The path to a valid CIF file.
+#' @param messages A logical variable. If TRUE (default) the function prints
+#'    a message highlighting what is included in the cif file.
+#' @return A named list. Each name correspond to a valid field in the powder
+#'    diffraction Rietveld processed CIF.
+#' @examples
+#' #filename <- "/path_to_file/example.rtv"
+#' #lcif <- readpd_rtv(filename)
+#' #print(names(lcif))
+#' #print(lcif$INTRO$CELL)
+#' #print(lcif$INTRO$HALL)
+#' #print(lcif$INTRO$HM)
+#' #print(lcif$REFL)
+#' @export
 readpd_rtv <- function(filename, messages=FALSE){
   f <- file(filename)
   lcif <- readLines(f,warn=FALSE)
