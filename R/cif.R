@@ -23,7 +23,7 @@ readCIF <- function(filename, messages=FALSE){
   lcif <- readLines(f,warn=FALSE)
   l_list <- grep("loop_",lcif)
   l_list1 <- append(l_list,length(lcif))
-  mat<-rollapply(l_list1, 2,stack)
+  mat<-zoo::rollapply(l_list1, 2,stack)
   ch <- apply(mat, 1, function(x) lcif[(x[1]+1):(x[2]-1)])
   crystal_summary <- lapply(ch, ucheck, pattern="_publ_author_name")
   symmetry <- lapply(ch, ucheck, pattern="_space_group_symop_operation")
@@ -40,18 +40,18 @@ readCIF <- function(filename, messages=FALSE){
   symm <- ansnull(symmetry)
   #reflections <- if (is.na(nanona(reflection)) == FALSE) r_angle(reflection) else NULL
   reflections <- ansnull(reflection)
-  coordinate <- if (is.na(nanona(coordinates)) == FALSE) r_positions(nanona(coordinates)) else NULL
+  coordinate <- if (is.na(nanona(coordinates)) == FALSE) clean(r_positions(nanona(coordinates))) else NULL
   #coordinate <- r_positions(ansnull(coordinates))
-  anisotropies <- if (is.na(nanona(anisotropy)) == FALSE) r_aniso(nanona(anisotropy)) else NULL
+  anisotropies <- if (is.na(nanona(anisotropy)) == FALSE) clean(r_aniso(nanona(anisotropy))) else NULL
   #anisotropies <- r_aniso(ansnull(anisotropy))
   symbolics <- ansnull(symbol)
-  angle <- if (is.na(nanona(geom_angle)) == FALSE) r_angle(nanona(geom_angle)) else NULL
+  angle <- if (is.na(nanona(geom_angle)) == FALSE) clean(r_angle(nanona(geom_angle))) else NULL
   #angle <- r_angle(ansnull(geom_angle))
-  distance <- if (is.na(nanona(geom_distance)) == FALSE) r_dist(nanona(geom_distance)) else NULL
+  distance <- if (is.na(nanona(geom_distance)) == FALSE) clean(r_dist(nanona(geom_distance))) else NULL
   #distance <- r_dist(ansnull(geom_distance))
-  hbond <- if (is.na(nanona(geom_hbond)) == FALSE) r_hbond(nanona(geom_hbond)) else NULL
+  hbond <- if (is.na(nanona(geom_hbond)) == FALSE) clean(r_hbond(nanona(geom_hbond))) else NULL
   #hbond <- r_hbond(ansnull(geom_hbond))
-  torsion <- if (is.na(nanona(geom_torsion)) == FALSE) r_torsion(nanona(geom_torsion)) else NULL
+  torsion <- if (is.na(nanona(geom_torsion)) == FALSE) clean(r_torsion(nanona(geom_torsion))) else NULL
   #torsion <- r_torsion(ansnull(geom_torsion))
   #CIF=list(INTRO=intro,SYMM=symm,COOR=coordinate,ANISO=anisotropies)
   CIF = list(HEADER=intro,SYMM=symm,REFL=reflections,COOR=coordinate,ANISO=anisotropies,SYMB=symbolics,ANGLE=angle,DIST=distance,HBOND=hbond,TORSION=torsion)
@@ -113,6 +113,45 @@ check1 <- function(pattern,word){
   r1 <- if(length(r) > 0) (strsplit(r, "'")[[1]])[2] else NA
   return(r1)
 }
+
+clean1 <- function(x){
+  if (all(is.na(x)) == TRUE){
+    out <- NULL
+  } else
+  { out <- as.data.frame(x)
+  return(out)
+  }
+}
+
+
+clean <- function(x){
+  co1 <- data.frame(gsub ("[()]","",as.matrix(x),perl=T))
+  ref <- data.frame(gsub("(?<!\\))(?:\\w+|[^()])(?!\\))","",as.matrix(x),perl=T))
+  ref1 <- data.frame(gsub("[()]","",as.matrix(ref),perl=T))
+  ref1[ref1==""]<-NA
+  ref2 <- clean1(ref1)
+  return(list(VAL=co1,STD=ref2))
+}
+
+reap1 <- function(x){
+  if (all(is.na(x)) == TRUE){
+    out <- NULL
+  } else
+  { out <- as.numeric(x)
+  return(out)
+  }
+}
+
+reap <- function(pattern,word){
+  r <- grep(pattern, word, value = TRUE)
+  r1 <- if(length(r) > 0) (strsplit(r, "\\s+")[[1]])[2] else NA
+  v <- as.numeric(gsub ("[()]","",as.matrix(r1),perl=T))
+  s <- gsub("(?<!\\))(?:\\w+|[^()])(?!\\))","",as.matrix(r1),perl=T)
+  s1 <- gsub("[()]","",as.matrix(s),perl=T)
+  s2 <- reap1(s1)
+  return(list(VAL=v,STD=s2))
+}
+
 
 r_positions <- function (x){
   data <- unlist(x)
@@ -192,19 +231,19 @@ r_torsion <- function(x){
 r_summ <- function(x){
   data <- unlist(x)
   formula <- check1("_chemical_formula_sum",data)
-  a <- check("_cell_length_a",data)
-  b <- check("_cell_length_b",data)
-  c <- check("_cell_length_c",data)
-  al <- check("_cell_angle_alpha",data)
-  be <- check("_cell_angle_beta",data)
-  ga <- check("_cell_angle_gamma",data)
-  v <- as.numeric(check("_cell_volume",data))
-  den <-as.numeric(check("_exptl_crystal_density_diffrn",data))
+  a <- reap("_cell_length_a",data)
+  b <- reap("_cell_length_b",data)
+  c <- reap("_cell_length_c",data)
+  al <- reap("_cell_angle_alpha",data)
+  be <- reap("_cell_angle_beta",data)
+  ga <- reap("_cell_angle_gamma",data)
+  v <- reap("_cell_volume",data)
+  den <- reap("_exptl_crystal_density_diffrn",data)
   c_sy <- check("_symmetry_cell_setting",data)
   sg_n <- as.numeric(check("_space_group_IT_number",data))
   sg_hall<- check1("_symmetry_space_group_name_Hall",data)
   sg_HM <- check1("_symmetry_space_group_name_H-M",data)
-  cell <- as.numeric(list(a,b,c,al,be,ga))
+  cell <- list(A=a,B=b,C=c,ALPHA=al,BETA=be,GAMMA=ga)
   #sg <- list(c_sy,sg_n,sg_hall,sg_HM)
   #prop <- list(v,den)
   summ_c <- list(FORMULA=formula,CELL=cell,VOL=v,DEN=den,CrysSys=c_sy,SGN=sg_n,HALL=sg_hall,HM=sg_HM)
