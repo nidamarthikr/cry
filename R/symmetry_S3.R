@@ -174,6 +174,8 @@ cryst_symm <- function(SG=NULL,set=NULL) {
 #' @rdname print.cryst_symm
 #' @export
 print.cryst_symm <- function(x,...) {
+  # Check name is OK (replace later with check_cryst_symm_validity')
+
   cat("This is an object of class 'cryst_symm'\n")
   msg <- paste0("The space group represented is ",x$SG,".\n")
   cat(msg)

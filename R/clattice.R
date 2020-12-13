@@ -167,6 +167,45 @@ crystal_system <- function(gn) {
 }
 
 
+#' Crystal family corresponding to given space group.
+#'
+#' @param gn A natural integer (1,2,3,...). the space group number.
+#' @return A character string, the name of the crystal family associated
+#'         with the given space group. If the input integer does not correspond
+#'         any existing space group, the function returns NULL and throws a
+#'         warning.
+#' @examples
+#' # P1 is part of the TRICLINIC family
+#' crystal_family(1)
+#'
+#' # The object returned is a string
+#' cfam <- crystal_family(1)
+#' class(cfam)
+#' @export
+crystal_family <- function(gn) {
+  # Given the space group number (gn), returns the crystal family
+  # bs = 1 TRICLINIC
+  # bs = 2 MONOCLINIC
+  # bs = 3 ORTHOROMBIC
+  # bs = 4 TETRAGONAL
+  # bs = 5 CUBIC
+  # bs = 6 HEXAGONAL
+  if (gn >=   1 & gn <=   2) bs <- 1
+  if (gn >=   3 & gn <=  15) bs <- 2
+  if (gn >=  16 & gn <=  74) bs <- 3
+  if (gn >=  75 & gn <= 142) bs <- 4
+  if (gn >= 143 & gn <= 194) bs <- 6
+  if (gn >= 195 & gn <= 230) bs <- 5
+  if (gn < 1 | gn > 230) {
+    warning("No space group associated with this number.")
+    return(NULL)
+  }
+  bs_name <- c("TRICLINIC","MONOCLINIC","ORTHOROMBIC","TETRAGONAL","CUBIC","HEXAGONAL")
+
+  return(bs_name[bs])
+}
+
+
 #' Matrix for cell orthogonalisation (first choice)
 #'
 #' Given the cell parameters, this function returns a matrix for
