@@ -582,6 +582,47 @@ create_unit_cell.rec_unit_cell <- function(a,...) {
 }
 
 
+#' Unit cell starting from a CIF object
+#'
+#' Method to create an object of class "unit_cell" starting from an object of
+#' class "CIF".
+#'
+#' @param a An object of class "CIF".
+#' @param ... Additional arguments passed to the create_unit_cell methods
+#' @return An object of class "unit_cell". It is a named list of length 6 whose
+#'         last three slots are of "angle" class.
+#' @examples
+#' # Create an object of class 'CIF' from a file
+#' #cobj <- CIF("directory.filename.cif")
+#'
+#' # Unit_cell object from CIF object
+#' #uc <- create_unit_cell(cobj)
+#' #print(uc)
+#'
+#' @rdname create_unit_cell.CIF
+#' @export
+create_unit_cell.CIF <- function(a,...) {
+  cobj <- a
+  # Check cobj is an object of class "CIF"
+  if(!is(cobj,"CIF")) {
+    stop("Input must be a valid object of class 'CIF'.")
+  }
+
+  # Extract unit cell parameters
+  a <- cobj$HEADER$CELL$A$VAL
+  b <- cobj$HEADER$CELL$B$VAL
+  c <- cobj$HEADER$CELL$C$VAL
+  aa <- cobj$HEADER$CELL$ALPHA$VAL
+  bb <- cobj$HEADER$CELL$BETA$VAL
+  cc <- cobj$HEADER$CELL$GAMMA$VAL
+
+  # unit_cell_object
+  uc <- unit_cell(a,b,c,aa,bb,cc)
+
+  return(uc)
+}
+
+
 #' Volume of a unit cell (in angstroms^3)
 #'
 #' Method of the S3 generic class "calculate_cell_volume", to calculate the
@@ -832,6 +873,59 @@ create_rec_unit_cell.unit_cell <- function(ar,...) {
   aa <- uc$alpha[1]
   bb <- uc$beta[1]
   cc <- uc$gamma[1]
+
+  # Lattice calculations
+  ltmp <- lattice_stuff(a,b,c,aa,bb,cc)
+
+  # Reciprocal cell parameters
+  ar <- ltmp[[7]]
+  br <- ltmp[[8]]
+  cr <- ltmp[[9]]
+  aar <- atan2(ltmp[[10]],ltmp[[13]])*180/pi
+  bbr  <- atan2(ltmp[[11]],ltmp[[14]])*180/pi
+  ccr <- atan2(ltmp[[12]],ltmp[[15]])*180/pi
+
+  # rec_unit_cell_object
+  ruc <- rec_unit_cell(ar,br,cr,aar,bbr,ccr)
+
+  return(ruc)
+}
+
+
+#' Reciprocal unit cell starting from a CIF object
+#'
+#' Method to create an object of class "rec_unit_cell" starting from an object of
+#' class "CIF".
+#'
+#' @param ar An object of class "CIF".
+#' @param ... Additional arguments passed to the create_rec_unit_cell methods
+#' @return An object of class "rec_unit_cell". It is a named list of length 6 whose
+#'         last three slots are of "angle" class.
+#' @examples
+#' # Create a CIF object from a cif file
+#' #cobj <- CIF("directory/filename.cif")
+#'
+#' # Create rec_unit_cell object
+#' #ruc <- create_rec_unit_cell(cobj)
+#' #print(ruc)
+#'
+#' @rdname create_rec_unit_cell.CIF
+#' @export
+create_rec_unit_cell.CIF <- function(ar,...) {
+  cobj <- ar
+  # Check cobj is an object of class "CIF"
+  if(!is(cobj,"CIF")) {
+    stop("Input must be a valid object of class 'CIF'.")
+  }
+
+  # Extract unit cell parameters
+  # Extract unit cell parameters
+  a <- cobj$HEADER$CELL$A$VAL
+  b <- cobj$HEADER$CELL$B$VAL
+  c <- cobj$HEADER$CELL$C$VAL
+  aa <- cobj$HEADER$CELL$ALPHA$VAL
+  bb <- cobj$HEADER$CELL$BETA$VAL
+  cc <- cobj$HEADER$CELL$GAMMA$VAL
 
   # Lattice calculations
   ltmp <- lattice_stuff(a,b,c,aa,bb,cc)
