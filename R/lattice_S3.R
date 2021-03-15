@@ -117,3 +117,33 @@ bravais <- function(bt=NULL) {
 
   return(bt)
 }
+
+
+#' Print method for an object of class "bravais".
+#'
+#' The Bravais lattice and related crystal family, crystal system and lattice system
+#' are displayed.
+#'
+#' @param x An object of class "bravais".
+#' @param ... Additional arguments passed to the print methods
+#' @examples
+#' # Create a triclinic Bravais lattice
+#' bt <- bravais()
+#'
+#' # Display its value
+#' print(bt)
+#' @rdname print.bravais
+#' @export
+print.bravais <- function(x,...) {
+  cat("This is an object of class 'bravais'\n")
+  msg <- sprintf("The Bravais lattive is:  %s.\n",x$bt)
+  cat(msg)
+  msg <- sprintf("Its crystal family is %s.\n",x$cr_fam)
+  cat(msg)
+  msg <- sprintf("Its crystal system is %s.\n",x$cr_sys)
+  cat(msg)
+  msg <- sprintf("Its lattice system is %s.\n",x$lt_sys)
+  cat(msg)
+
+  invisible(x)
+}

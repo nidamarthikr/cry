@@ -684,3 +684,2281 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
     return(I(x))
   }
 }
+
+
+#' Generate Miller indices
+#'
+#' Function to create a data frame with complete set of Miller
+#' indices, up to a given resolution (in angstroms).
+#'
+#' Miller indices are named H, K, L in the data frame. Only
+#' values of (H,K,L) corresponding to a resolution d(h,k,l) >=
+#' reso (in angstroms), are included. The full list does not
+#' include systematic absences corresponding to the specific
+#' symmetry of the crystal.
+#'
+#' @param uc An object of class "unit_cell".
+#' @param csym An object of class "cryst_symm".
+#' @param reso A real number. The highest data resolution, in
+#'             angstroms.
+#' @param set An integer number corresponding to the specific
+#'            setting for the given space group. Default is 1.
+#' @return hkl A data frame with columns H, K, L corresponding
+#'             to the three Miller indices.
+#' @examples
+#' Create a C 2 (monoclinic) space group
+#' csym <- cryst_symm("C 2")
+#'
+#' # Create an arbitrary cell compatible with C 2
+#' uc <- unit_cell(10,15,10,90,110,90)
+#'
+#' # Generate Miller indices to 5 angstroms resolution
+#' hkl <- generate_miller(uc,csym,reso)
+#'
+#' # Display first 10 indices
+#' hkl[1:10,]
+#'
+#' @export
+generate_miller <- function(uc,csym,reso,set=1) {
+  # Cell parameters
+  a <- uc$a
+  b <- uc$b
+  c <- uc$c
+  aa <- uc$alpha
+  bb <- uc$beta
+  gg <- uc$gamma
+
+  # Inverse, squared resolution
+  ss <- (1/reso)^2
+
+  # Coefficients of squared resolution function
+  ctmp <- squared_resolution_coeffs(a,b,c,aa,bb,gg)
+  ca <- ctmp[1]
+  cb <- ctmp[2]
+  cc <- ctmp[3]
+  cd <- ctmp[4]
+  ce <- ctmp[5]
+  cf <- ctmp[6]
+
+  # Find max h, k, l to generate all (h,k,l) within minimal box
+
+  # Coefficient determinant (common to both h, and k and l)
+  D <- ca*(cb*cc-cf^2)-cd*(cc*cd-ce*cf)+ce*(cd*cf-cb*ce)
+
+  # Max h
+  A <- (cb*cc-cf^2)/D
+  B <- (ce*cf-cc*cd)/D
+  C <- (cd*cf-cb*ce)/D
+  t <- sqrt(ss/(ca*A^2+cb*B^2+cc*C^2+2*cd*A*B+2*ce*A*C+2*cf*B*C))
+  max_h <- ceiling(A*t)
+
+  # Max k
+  A <- (ce*cf-cc*cd)/D
+  B <- (ca*cc-ce^2)/D
+  C <- (cd*ce-ca*cf)/D
+  t <- sqrt(ss/(ca*A^2+cb*B^2+cc*C^2+2*cd*A*B+2*ce*A*C+2*cf*B*C))
+  max_k <- ceiling(B*t)
+
+  # Max l
+  A <- (cd*cf-cb*ce)/D
+  B <- (cd*ce-ca*cf)/D
+  C <- (ca*cb-cd^2)/D
+  t <- sqrt(ss/(ca*A^2+cb*B^2+cc*C^2+2*cd*A*B+2*ce*A*C+2*cf*B*C))
+  max_l <- ceiling(C*t)
+
+  # Dataframe with all h, k, l
+  hkl <- expand.grid(H=-max_h:max_h,K=-max_k:max_k,
+                     L=-max_l:max_l)
+
+  # Strictly reflections with resolution lower than reso
+  hkl <- hkl[1/hkl_to_reso(hkl$H,hkl$K,hkl$L,
+                               a,b,c,aa,bb,gg) <= 1/reso,]
+
+  # Add inverse of resolution (s) as last column of data frame
+  s <- 1/hkl_to_reso(hkl$H,hkl$K,hkl$L,a,b,c,aa,bb,gg)
+  hkl <- cbind(hkl,data.frame(s=s))
+
+  # Eliminate systematic absences from data frame
+  hkl <- deplete_systematic_absences(hkl,csym,set)
+
+  # Re-number rows
+  row.names(hkl) <- 1:length(hkl[,1])
+
+  return(hkl)
+}
+
+# Given cell parameters return coefficients for the expression
+# of squared resolution:
+#
+#  s^2 = a*h^2+b*k^2+c*l^2+2*d*h*k+2*e*h*l+2*f*k*l
+#
+squared_resolution_coeffs <- function(a,b,c,aa,bb,cc) {
+  # Copy original names into new ones (to adapt old code)
+  cell_a <- a
+  cell_b <- b
+  cell_c <- c
+  cell_alpha <- aa
+  cell_beta <- bb
+  cell_gamma <- cc
+
+  ctmp <- unname(lattice_stuff(cell_a,cell_b,cell_c,
+                               cell_alpha,cell_beta,cell_gamma))
+  den <- 1-ctmp[4]^2-ctmp[5]^2-
+         ctmp[6]^2+2*ctmp[4]*ctmp[5]*ctmp[6]
+  a <- ctmp[1]^2/(cell_a^2*den)
+  b <- ctmp[2]^2/(cell_b^2*den)
+  c <- ctmp[3]^2/(cell_c^2*den)
+  d <- (ctmp[4]*ctmp[5]-ctmp[6])/(cell_a*cell_b*den)
+  e <- (ctmp[4]*ctmp[6]-ctmp[5])/(cell_a*cell_c*den)
+  f <- (ctmp[5]*ctmp[6]-ctmp[4])/(cell_b*cell_c*den)
+
+  return(c(a,b,c,d,e,f))
+}
+
+
+#' Deplete systematic absences
+#'
+#' Remove systematically-absent reflections from a data frame
+#' in which Miller indices are in the first three columns.
+#' The systematically-absent reflections are determined by the
+#' specific space group.
+#'
+#' Crystallography symmetry forces constraints on data from
+#' x-ray diffraction. One of these constraints consists in the
+#' full cancellation of reflections with certain Miller indices.
+#' It is said that the reflection with that specific Miller index
+#' is systematically absent. For example, in data corresponding
+#' to a crystal with space group C 2, general reflections like
+#' (h,k,l) must obey h+k=2n (even number). Thus, the Miller
+#' indices (2,3,1) are a systematic absence because 2+3=5 (odd).
+#'
+#' @param hkl A data frame with first three columns H, K, L
+#'        corresponding to the three Miller indices. This is
+#'        normally the 'record' data frame in an object of
+#'        class "merged_reflections".
+#' @param csym An object of class "cryst_symm".
+#' @param set An integer number corresponding to the specific
+#'            setting for the given space group. Default is 1.
+#' @return hkl The same data frame acquired from input, depleted
+#'             of all systematic absences.
+#'
+#' @examples
+#' # Create a C 2 (monoclinic) space group
+#' csym <- cryst_symm("C 2")
+#'
+#' # Create an arbitrary cell compatible with C 2
+#' uc <- unit_cell(10,15,10,90,110,90)
+#'
+#' # Crete the related reciprocal cell
+#' ruc <- create_rec_unit_cell(uc)
+#'
+#' # Create a full data frame of Miller indices
+#' hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
+#'
+#' # Get rid of systematic absences
+#' new_hkl <- deplete_systematic_absences(hkl,sym)
+#'
+#' # Compare first 10 items of original and depleted arrays
+#' hkl[1:10,]
+#' new_hkl[1:10,]
+#'
+#' @export
+deplete_systematic_absences <- function(hkl,csym,set=1) {
+  # Make a m X 3 matrix of original Miller indices
+  hkl2 <- as.matrix(hkl[,1:3])
+
+  # Delete incorrect Miller indices if they are
+  # systematically-absent
+  idx <- sysabs(hkl2,csym,set)
+  hkl <- hkl[idx,]
+
+  return(hkl)
+}
+
+
+#' Delete systematic absences (Miller indices)
+#'
+#' Given an mX3 matrix of Miller indices, this function returns
+#' those indices corresponding to valid reflections, i.e. to
+#' reflections which are not systematic absences.
+#'
+#' Crystallography symmetry forces constraints on data from
+#' x-ray diffraction. One of these constraints consists in the
+#' full cancellation of reflections with certain Miller indices.
+#' It is said that the reflection with that specific Miller index
+#' is systematically absent. For example, in data corresponding
+#' to a crystal with space group C 2, general reflections like
+#' (h,k,l) must obey h+k=2n (even number). Thus, the Miller
+#' indices (2,3,1) are a systematic absence because 2+3=5 (odd).
+#'
+#' @param hkl An mX3 matrix or a data frame whose rows are the
+#'            three integers corresponding to the Miller
+#'            indices.
+#' @param csym An object of class "cryst_symm".
+#' @param set An integer number corresponding to the specific
+#'            setting for the given space group. Default is 1.
+#' @return idx A vector of integers corresponding to the
+#'             position, in the array \code{mhkl}, in which the
+#'             Miller indices ARE NOT systematically absent.
+#'             The position of systematically-absent reflections
+#'             can be found using !idx.
+#'
+#' @examples
+#' # Create a C 2 (monoclinic) space group
+#' csym <- cryst_symm("C 2")
+#'
+#' # Create an arbitrary cell compatible with C 2
+#' uc <- unit_cell(10,15,10,90,110,90)
+#'
+#' # Crete the related reciprocal cell
+#' ruc <- create_rec_unit_cell(uc)
+#'
+#' # Create a full data frame of Miller indices
+#' hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
+#'
+#' # Index corresponding to valid reflections
+#' # (not systematic absences)
+#' idx <- sysabs(hkl,csym)
+#'
+#' # Indices for all reflections
+#' fulldx <- 1:length(hkl[,1])
+#'
+#' # Index corresponding to systematic absences
+#' jdx <- fulldx[-idx,]
+#'
+#' # A couple of systematic absences
+#' hkl[jdx[1:2],]
+#'
+#' @export
+sysabs  <- function(hkl,csym,set=1) {
+  # Extract symmetry number and setting
+  value <- csym$SG
+  sym_number <- translate_SG(value,SG_in="xHM",
+                             SG_out="number",set=set)
+  if (!sym_number$ans) stop(sym_number$msg)
+  sym_number <- sym_number$msg
+  setting <- set
+
+  # First add a fourth column with 0 to matrix
+  nrefs <- nrow(hkl)
+  hkl <- cbind(hkl,matrix(rep(0,times=nrefs),nrow=nrefs))
+  colnames(hkl)[4] <- "FLAG"
+
+  # Long list for all space groups and settings
+
+  #########################################################################################################################
+  #########
+  #########            TRICLINIC: 1 to 2
+  #########
+  #########################################################################################################################
+  # Nothing to do for sym_number 1
+  # Nothing to do for sym_number 2
+  #########################################################################################################################
+  #########
+  #########            MONOCLINIC: 3 to 15
+  #########
+  #########################################################################################################################
+  # Nothing to do for sym_number 3
+  if (sym_number == 4)
+  {
+    if (setting == 1) hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 2) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 3) hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 5)
+  {
+    if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 4) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 5) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 6) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 7) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 8) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 9) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 10) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 11) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 6
+  if (sym_number == 7)
+  {
+    if (setting == 1) hkl[hkl[,2] == 0 & hkl[,3]%%2 != 2,3] <- NA
+    if (setting == 2) hkl[hkl[,2] == 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 4) hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 5) hkl[hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 6) hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 7) hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 8) hkl[hkl[,1] == 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 9) hkl[hkl[,1] == 0 & hkl[,3]%%2,3] <- NA
+  }
+  if (sym_number == 8)
+  {
+    if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 4) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 5) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 6) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 7) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 8) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 9) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 10) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 9)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 7)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 8)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 9)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 10)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 11)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 12)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 13)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 14)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 15)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 16)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 17)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 18)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  # Nothing to do for sym_number 10, 11
+  if (sym_number == 12)
+  {
+    if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 4) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 5) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 6) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 7) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 8) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 9) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 13)
+  {
+    if (setting == 1) hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 2) hkl[hkl[,2] == 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 4) hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 5) hkl[hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 6) hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 7) hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 8) hkl[hkl[,1] == 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 9) hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 14)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 7)
+    {
+      hkl[hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 8)
+    {
+      hkl[hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 9)
+    {
+      hkl[hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 15)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 7)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 8)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 9)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 10)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 11)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 12)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 13)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 14)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 15)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 16)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 17)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 18)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  #########################################################################################################################
+  #########
+  #########            ORTHOROMBIC: 16 to 74
+  #########
+  #########################################################################################################################
+  # Nothing to do for sym_number 16
+  if (sym_number == 17)
+  {
+    if (setting == 1) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 2) hkl[hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 3) hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 18
+  if (sym_number == 19)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 20)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 21)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- 3
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- 3
+    if (setting == 3) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- 3
+  }
+  if (sym_number == 22)
+  {
+    hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 23) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 24)
+  {
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 25
+  if (sym_number == 26)
+  {
+    if (setting == 1) hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 2) hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 3) hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 27)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,3] == 0 & hkl[,1] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 28)
+  {
+    if (setting == 1) hkl[hkl[,2] == 0 & hkl[,1] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 2 | setting == 3) hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 4) hkl[hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 5) hkl[hkl[,1] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 6) hkl[hkl[,3] == 0 & hkl[,1] != 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 29)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,2] == 0 & hkl[,1] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,2] == 0 & hkl[,1] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,3] == 0 & hkl[,2] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 30)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 31)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 32)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 33)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 34)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 35)
+  {
+    if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 36)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 37)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 38)
+  {
+    if (setting == 1) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 4) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 5) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 6) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 39)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 40)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 41)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 42)
+  {
+    hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 43)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%4 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%4 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%4 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%4 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 44) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 45)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 46)
+  {
+    if (setting == 1)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  # Nothing to do for sym_number 47
+  if (sym_number == 48)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 49)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 50)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 51)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 52)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 53)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 54)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 55)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 56)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 57)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 58)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 59)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 60)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 61)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 62)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 63)
+  {
+    if (setting == 1) hkl[hkl[,2] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 2) hkl[hkl[,1] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 3) hkl[hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 4) hkl[hkl[,2] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    if (setting == 5) hkl[hkl[,1] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 6) hkl[hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    if (setting == 1 | setting == 2) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 3 | setting == 4) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 5 | setting == 6) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 64)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    }
+    if (setting == 1 | setting == 2) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 3 | setting == 4) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting == 5 | setting == 6) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 65)
+  {
+    if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,l])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,l])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 66)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,l])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,l])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 67)
+  {
+    if (setting == 1 | setting == 2 | setting == 6)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 4 | setting == 5)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 68)
+  {
+    if (setting == 1 | setting == 2 | setting == 3 | setting == 4)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 5 | setting == 6 | setting == 7)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 8)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 9 | setting == 10 | setting == 11)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 12)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting >= 1 & setting <= 4) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    if (setting >= 5 & setting <= 8) hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    if (setting >= 9 & setting <= 12) hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 69)
+  {
+    hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 70)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (3*(hkl[,1]+hkl[,2]))%%4 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (3*(hkl[,2]+hkl[,3]))%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (3*(hkl[,1]+hkl[,3]))%%4 != 0,4] <- NA
+    hkl[(hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 71)
+  {
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 72)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 73)
+  {
+    if (setting == 1)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 74)
+  {
+    if (setting == 1 | setting == 2)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 3)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    if (setting == 4)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+      hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    }
+    if (setting == 5)
+    {
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    }
+    if (setting == 6)
+    {
+      hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+      hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    }
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  #########################################################################################################################
+  #########
+  #########            TETRAGONAL: 75 to 142
+  #########
+  #########################################################################################################################
+  # Nothing to do for sym_number 75
+  if (sym_number == 76) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+  if (sym_number == 77) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  if (sym_number == 78) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+  if (sym_number == 79) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 80)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 81
+  if (sym_number == 82) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  # Nothing to do for sym_number 83
+  if (sym_number == 84) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  if (sym_number == 85) hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  if (sym_number == 86)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 87) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 88)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 89
+  if (sym_number == 90)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 91) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  if (sym_number == 92)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 93) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  if (sym_number == 94)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 95) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+  if (sym_number == 96)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 97) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 98)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 99
+  if (sym_number == 100)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 101)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 102)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 103)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] ==  hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 104)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] ==  hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 105)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] ==  hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 106)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 107) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 108)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 109)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & (2*hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 110)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & (2*hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 111
+  if (sym_number == 112) hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  if (sym_number == 113)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 114)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] ==  hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 115
+  if (sym_number == 116)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 117)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 118)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 119) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 120)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 121) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 122)
+  {
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & (2*hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 123
+  if (sym_number == 124)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] ==  hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 125)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & +hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & +hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 126)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 127)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 128)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 129)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 130)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 131)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 132)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 133)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 134)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 135)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 136)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & (hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 137)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 138)
+  {
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,2]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & (hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 139) hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  if (sym_number == 140)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 141)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & (hkl[,1]+hkl[,3])%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & (2*hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  if (sym_number == 142)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%4 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] == 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] != 0 & hkl[,3] == 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,1]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & (2*hkl[,1]+hkl[,3])%%4 != 0,4] <- NA
+    hkl[(hkl[,1]+hkl[,2]+hkl[,3])%%2 != 0,4] <- NA
+  }
+  #########################################################################################################################
+  #########
+  #########            TRIGONAL: 143 to 167
+  #########
+  #########################################################################################################################
+  # Nothing to do for sym_number 143
+  if (sym_number == 144) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%3 != 0,4] <- NA
+  if (sym_number == 145) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%3 != 0,4] <- NA
+  if (sym_number == 146)
+  {
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+    # Nothing to do for setting 2
+  }
+  # Nothing to do for sym_number 147
+  if (sym_number == 148)
+  {
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+    # Nothing to do for setting 2
+  }
+  # Nothing to do for sym_number 149
+  # Nothing to do for sym_number 150
+  if (sym_number == 151) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%3 != 0,4] <- NA
+  if (sym_number == 152) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%3 != 0,4] <- NA
+  if (sym_number == 153) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%3 != 0,4] <- NA
+  if (sym_number == 154) hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%3 != 0,4] <- NA
+  if (sym_number == 155)
+  {
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+    # Nothing to do for setting 2
+  }
+  # Nothing to do for sym_number 156
+  # Nothing to do for sym_number 157
+  if (sym_number == 158)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 159)
+  {
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 160)
+  {
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+    # Nothing to do for setting 2
+  }
+  if (sym_number == 161)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+    # Nothing else for setting 2
+  }
+  # Nothing to do for sym_number 162
+  if (sym_number == 163)
+  {
+    hkl[hkl[,1] == hkl[,2] & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  # Nothing to do for sym_number 164
+  if (sym_number == 165)
+  {
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  if (sym_number == 166)
+  {
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+  }
+  if (sym_number == 167)
+  {
+    if (setting == 1)
+    {
+      hkl[(-hkl[,1]+hkl[,2]+hkl[,3])%%3 != 0,4] <- NA
+    }
+    hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] != 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+    hkl[hkl[,1] == 0 & hkl[,2] == 0 & hkl[,3] != 0 & hkl[,3]%%2 != 0,4] <- NA
+  }
+  #########################################################################################################################
+  #########
+  #########            HEXAGONAL: 168 to 194
+  #########
+  #########################################################################################################################
+  #########################################################################################################################
+  #########
+  #########            CUBIC: 195 to 230
+  #########
+  #########################################################################################################################
+
+  # Delete systematic absences
+  idx <- which(complete.cases(hkl))
+
+  return(idx)
+}
