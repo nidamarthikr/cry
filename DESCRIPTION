@@ -14,7 +14,7 @@ Description: Reading and writing of files in the most commonly used formats of
   crystallographic computing.
 License: GPL-2
 LazyLoad: yes
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.1
 suggests: knitr
 VignetteBuilder: knitr
 Encoding: UTF-8

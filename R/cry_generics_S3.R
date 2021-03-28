@@ -59,3 +59,23 @@ create_rec_unit_cell <- function(ar,...) UseMethod("create_rec_unit_cell")
 #'
 #' @export
 calculate_cell_volume <- function(x,...) UseMethod("calculate_cell_volume")
+
+#' S3 generic to create merged_reflections objects
+#'
+#' The merged_reflections object can be created starting from
+#' specific objects, files, etc.
+#'
+#' @param a An object used to select a method.
+#' @param ... Further arguments passed to or from other methods.
+#' @examples
+#' # Create a default merged_reflections object (no arguments)
+#' mrefs <- create_merged_reflections()
+#' print(mrefs)
+#'
+#' @importFrom graphics hist
+#' @importFrom stats na.omit sd
+#' @importFrom utils read.table write.table
+#' @importFrom methods is
+#' @export
+create_merged_reflections <- function(a,...)
+  UseMethod("create_merged_reflections")

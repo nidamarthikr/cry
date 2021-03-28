@@ -2,19 +2,17 @@
 % Please edit documentation in R/reflections.R
 \name{sysabs}
 \alias{sysabs}
-\title{Delete systematic absences (Miller indices)}
+\title{Locate systematic absences}
 \usage{
-sysabs(hkl, csym, set = 1)
+sysabs(hkl, SG)
 }
 \arguments{
 \item{hkl}{An mX3 matrix or a data frame whose rows are the
 three integers corresponding to the Miller
 indices.}
 
-\item{csym}{An object of class "cryst_symm".}
-
-\item{set}{An integer number corresponding to the specific
-setting for the given space group. Default is 1.}
+\item{SG}{A character. The extended Hermann-Mauguin symbol
+of the crystallographic space group.}
 }
 \value{
 idx A vector of integers corresponding to the
@@ -39,8 +37,9 @@ to a crystal with space group C 2, general reflections like
 indices (2,3,1) are a systematic absence because 2+3=5 (odd).
 }
 \examples{
-# Create a C 2 (monoclinic) space group
-csym <- cryst_symm("C 2")
+# C 2 monoclinic space group (special setting)
+SG <- translate_SG(15,set=5)
+print(SG)
 
 # Create an arbitrary cell compatible with C 2
 uc <- unit_cell(10,15,10,90,110,90)
@@ -53,7 +52,7 @@ hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
 
 # Index corresponding to valid reflections
 # (not systematic absences)
-idx <- sysabs(hkl,csym)
+idx <- sysabs(hkl,SG)
 
 # Indices for all reflections
 fulldx <- 1:length(hkl[,1])

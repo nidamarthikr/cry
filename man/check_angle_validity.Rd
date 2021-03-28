@@ -4,13 +4,18 @@
 \alias{check_angle_validity}
 \title{Validity and compatibility of a cry object of class 'angle'}
 \usage{
-check_angle_validity(x)
+check_angle_validity(x, message = FALSE)
 }
 \arguments{
 \item{x}{Object of class angle.}
+
+\item{message}{A logical variable. If TRUE, the function
+prints a message on the errors, if any
+(default is FALSE, i.e. no message printed).}
 }
 \value{
-ans A logical value. TRUE means that the input is a valid object of class'angle'.
+ans A logical value. TRUE means that the input is
+            a valid object of class 'angle'.
 }
 \description{
 An object of class 'angle' is a numeric with logical attribure "rad_flag".
@@ -26,6 +31,6 @@ check_angle_validity(x)
 attr(x,"rad_flag") <- 12.5
 
 # Check its validity
-check_angle_validity(x)
+check_angle_validity(x,TRUE)
 
 }

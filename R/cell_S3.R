@@ -551,9 +551,13 @@ create_unit_cell.bravais <- function(a,...) {
 #' @export
 create_unit_cell.rec_unit_cell <- function(a,...) {
   ruc <- a
-  # Check ruc is an object of class "rec_unit_cell"
-  if(!is(ruc,"rec_unit_cell")) {
-    stop("Input must be a valid object of class 'rec_unit_cell'.")
+  # Check ruc is a valid object of class "rec_unit_cell"
+  if(!check_rec_unit_cell_validity(ruc)) {
+    msg <- paste("Input must be a valid object of",
+                 "class 'rec_unit_cell'.\n")
+    cat(msg)
+
+    return(NULL)
   }
 
   # Extract reciprocal unit cell parameters
@@ -622,6 +626,91 @@ create_unit_cell.CIF <- function(a,...) {
   return(uc)
 }
 
+#' Unit cell from a 'cryst_symm' object
+#'
+#' Method to create an object of class "unit_cell" starting
+#' from an object of class 'cryst_symm'.
+#'
+#' The symmetry of a space group imposes constrains on the
+#' parameters of unit cells. For example, the cubic group P 2 3
+#' means that all cell sides have to be equal and all angles
+#' have to be equal to 90 degrees. This function suggests the
+#' appropriate unit cell compatible with the given space group.
+#'
+#' @param a An object of class 'cryst_symm'.
+#' @param ... Additional arguments passed to the create_unit_cell.
+#' @return An object of class "unit_cell". It is a named list
+#'         of length 6 whose last three slots are of class
+#'         'angle'. Default cell parameters are a=10, b=20, c=15,
+#'         alpha=70, beta=80, gamma=100. When constrains due to
+#'         symmetry are required, b and c might be equalled to a,
+#'         alpha, beta and gamma might be set to 90, gamma might
+#'         be set to 120 and the three angles might be set
+#'         equal to each other.
+#'
+#' @examples
+#' # Symmetry "C 1 2/c 1"
+#' csym <- cryst_symm("C 1 2/c 1")
+#'
+#' # Unit_cell
+#' uc <- create_unit_cell(csym)
+#' print(uc)
+#'
+#' @rdname create_unit_cell.cryst_symm
+#' @export
+create_unit_cell.cryst_symm <- function(a,...) {
+  # Check validity of 'cryst_symm' object
+  ans <- check_cryst_symm_validity(a)
+  if (!ans) {
+    msg <- paste("Input is not a valid object of",
+                 "class 'cryst_symm'.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Base cell parameters (P 1 and P -1)
+  sa <- 10
+  sb <- 20
+  sc <- 15
+  aa <- 70
+  bb <- 80
+  cc <- 100
+
+  # Find symmetry constrains
+  vcons <- symm_to_cell_const(a$SG)
+
+  # Change cell parameters if constrains are found
+  if ("a=b" %in% vcons) {
+    sb <- sa
+  }
+  if ("a=b=c" %in% vcons) {
+    sb <- sa
+    sc <- sa
+  }
+  if ("alpha=90" %in% vcons) {
+    aa <- 90
+  }
+  if ("beta=90" %in% vcons) {
+    bb <- 90
+  }
+  if ("gamma=90" %in% vcons) {
+    cc <- 90
+  }
+  if ("gamma=120" %in% vcons) {
+    cc <- 120
+  }
+  if ("alpha=beta=gamma" %in% vcons) {
+    bb <- aa
+    cc <- aa
+  }
+
+  # Create unit_cell object
+  uc <- unit_cell(sa,sb,sc,aa,bb,cc)
+
+  return(uc)
+}
+
 
 #' Volume of a unit cell (in angstroms^3)
 #'
@@ -647,8 +736,12 @@ create_unit_cell.CIF <- function(a,...) {
 calculate_cell_volume.unit_cell <- function(x,...) {
   uc <- x
   # Check uc is an object of class "unit_cell"
-  if(!is(uc,"unit_cell")) {
-    stop("Input must be a valid object of class 'unit_cell'.")
+  if(!check_unit_cell_validity(uc)) {
+    msg <- paste("Input must be a valid object of",
+                 "class 'unit_cell'.\n")
+    cat(msg)
+
+    return(NULL)
   }
 
   # Extract unit cell parameters
@@ -862,8 +955,12 @@ create_rec_unit_cell.bravais <- function(ar,...) {
 create_rec_unit_cell.unit_cell <- function(ar,...) {
   uc <- ar
   # Check uc is an object of class "unit_cell"
-  if(!is(uc,"unit_cell")) {
-    stop("Input must be a valid object of class 'unit_cell'.")
+  if(!check_unit_cell_validity(uc)) {
+    msg <- paste("Input must be a valid object",
+                 "of class 'unit_cell'.\n")
+    cat(msg)
+
+    return(NULL)
   }
 
   # Extract unit cell parameters
@@ -944,6 +1041,61 @@ create_rec_unit_cell.CIF <- function(ar,...) {
   return(ruc)
 }
 
+#' Reciprocal unit cell from a 'cryst_symm' object
+#'
+#' Method to create an object of class "rec_unit_cell" starting
+#' from an object of class 'cryst_symm'.
+#'
+#' The symmetry of a space group imposes constrains on the
+#' parameters of unit cells. For example, the cubic group P 2 3
+#' means that all cell sides have to be equal and all angles
+#' have to be equal to 90 degrees. This function suggests the
+#' appropriate reciprocal cell compatible with the given space
+#' group.
+#'
+#' @param ar An object of class 'cryst_symm'.
+#' @param ... Additional arguments passed to the
+#'            create_rec_unit_cell.
+#' @return An object of class "rec_unit_cell". It is a named list
+#'         of length 6 whose last three slots are of class
+#'         'angle'. The cell parameters are calculated from those
+#'         of the corresponding unit cell. The default unit cell
+#'         parameters are a=10, b=20, c=15, alpha=70, beta=80,
+#'         gamma=100. When constrains due to symmetry are
+#'         required, b and c might be equalled to a, alpha, beta
+#'         and gamma might be set to 90, gamma might be set to
+#'         120 and the three angles might be set equal to each
+#'         other.
+#'
+#' @examples
+#' # Symmetry "C 1 2/c 1"
+#' csym <- cryst_symm("C 1 2/c 1")
+#'
+#' # Reciprocal unit_cell
+#' ruc <- create_rec_unit_cell(csym)
+#' print(ruc)
+#'
+#' @rdname create_rec_unit_cell.cryst_symm
+#' @export
+create_rec_unit_cell.cryst_symm <- function(ar,...) {
+  # Check validity of 'cryst_symm' object
+  ans <- check_cryst_symm_validity(ar)
+  if (!ans) {
+    msg <- paste("Input is not a valid object of",
+                 "class 'cryst_symm'.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Do the job with unit_cell
+  uc <- create_unit_cell.cryst_symm(ar)
+  ruc <- create_rec_unit_cell.unit_cell(uc)
+
+  return(ruc)
+}
+
+
 
 #' Volume of a reciprocal unit cell (in angstroms^(-3))
 #'
@@ -969,8 +1121,12 @@ create_rec_unit_cell.CIF <- function(ar,...) {
 calculate_cell_volume.rec_unit_cell <- function(x,...) {
   ruc <- x
   # Check ruc is an object of class "rec_unit_cell"
-  if(!is(ruc,"rec_unit_cell")) {
-    stop("Input must be a valid object of class 'rec_unit_cell'.")
+  if(!check_rec_unit_cell_validity(ruc)) {
+    msg <- paste("Input must be a valid object of",
+                 "class 'rec_unit_cell'.\n")
+    cat(msg)
+
+    return(NULL)
   }
 
   # Extract reciprocal cell parameters

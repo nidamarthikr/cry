@@ -4,12 +4,16 @@
 \alias{check_validity}
 \title{Validity and compatibility of cry objects}
 \usage{
-check_validity(x, y = NULL)
+check_validity(x, y = NULL, message = FALSE)
 }
 \arguments{
 \item{x}{A first object of one of the new cry classes.}
 
 \item{y}{A second  object of one of the new cry classes.}
+
+\item{message}{A logical variable. If TRUE, the function
+prints a message on the errors, if any
+(default is FALSE, i.e. no message printed).}
 }
 \value{
 ans A logical value. ans = TRUE means that either the parameters of the single
@@ -23,6 +27,22 @@ cannot have the a, b, c sides different from each other. The present function re
 all parts composing the object are compatible with each other. Otherwise it returns FALSE and
 one or more warnings with details.
 }
+\details{
+The available checks for individual objects are:
+\itemize{
+  \item \strong{angle} (unit cell angle)
+  \item \strong{bravais} (Bravais system)
+  \item \strong{unit_cell} (unit cell)
+  \item \strong{rec_unit_cell} (reciprocal unit cell)
+  \item \strong{cryst_symm} (crystallographic symmetry)
+  \item \strong{merged_reflections} (scaled and merged data)
+}
+The available checks for couple of objects are:
+\itemize{
+  \item \strong{bravais} and \strong{unit_cell}
+  \item \strong{unit_cell} and \strong{cryst_symm}
+}
+}
 \examples{
 # Create a cubic cell with side 50
 uc <- create_unit_cell(50)
@@ -31,6 +51,6 @@ uc <- create_unit_cell(50)
 crsym <- cryst_symm("P m -3")
 
 # Are they compatible with each other?
-check_validity(uc,crsym)
+check_validity(uc,crsym,TRUE)
 
 }

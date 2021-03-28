@@ -4,10 +4,14 @@
 \alias{check_cryst_symm_validity}
 \title{Validity and compatibility of a cry object of class 'cryst_symm'}
 \usage{
-check_cryst_symm_validity(x)
+check_cryst_symm_validity(x, message = FALSE)
 }
 \arguments{
 \item{x}{Object of class 'cryst_symm'.}
+
+\item{message}{A logical variable. If TRUE, the function
+prints a message on the errors, if any
+(default is FALSE, i.e. no message printed).}
 }
 \value{
 ans A logical value. TRUE means that the input is a valid object of class'cryst_symm'.
@@ -24,11 +28,10 @@ x <- cryst_symm(15)
 # Check its validity
 check_cryst_symm_validity(x)
 
-# Now change two fields
-x$SG <- "PPP"
+# Now change a field
 x$PG[[1]] <- matrix(rep(0,times=9),ncol=3)
 
 # Check validity again
-check_cryst_symm_validity(x)
+check_cryst_symm_validity(x,TRUE)
 
 }

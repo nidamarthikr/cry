@@ -4,8 +4,15 @@
 \alias{create_rec_unit_cell.default}
 \title{Default method for generic "create_rec_unit_cell"}
 \usage{
-\method{create_rec_unit_cell}{default}(ar = NULL, br = NULL,
-  cr = NULL, aar = NULL, bbr = NULL, ccr = NULL, ...)
+\method{create_rec_unit_cell}{default}(
+  ar = NULL,
+  br = NULL,
+  cr = NULL,
+  aar = NULL,
+  bbr = NULL,
+  ccr = NULL,
+  ...
+)
 }
 \arguments{
 \item{ar}{A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.}

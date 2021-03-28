@@ -52,19 +52,21 @@
 #'
 #' @export
 translate_SG <- function(value,SG_in="number",SG_out="xHM",set=1) {
-  # Special case in which set is not 1 and SG_in is not a number
-  if (SG_in != "number") {
-    tmp <- .translate_SG(value,SG_in,SG_out="number",set=1)
-    if (!tmp$ans) {
-      list_SG <- list(msg=tmp$msg,ans=FALSE)
+  # Special case in which SG_in is not a number
+  #if (SG_in != "number") {
+  #  tmp <- .translate_SG(value,SG_in,SG_out="number",set=set)
+  #  if (!tmp$ans) {
+  #    list_SG <- list(msg=tmp$msg,ans=FALSE)
 
-      return(list_SG)
-    }
-    tmp <- .translate_SG(tmp$msg,SG_in="number",SG_out=SG_out,set=set)
-    list_SG <- list(msg=tmp$msg,ans=tmp$ans)
+  #    return(list_SG)
+  #  }
+  #  tmp <- .translate_SG(tmp$msg,SG_in="number",SG_out=SG_out,
+  #                       set=set)
+  #  tmp <- .translate_SG(value,SG_in,SG_out,set)
+  #  list_SG <- list(msg=tmp$msg,ans=tmp$ans)
 
-    return(list_SG)
-  }
+  #  return(list_SG)
+  #}
   list_SG <- .translate_SG(value,SG_in,SG_out,set)
 
   return(list_SG)
@@ -588,11 +590,23 @@ findHM <- function(sym_xHM)
     SG <- tmp$msg
     return(SG)
   }
-  tmp <- translate_SG(sym_xHM,"xHM","xHM")
+  # For an xHM input is trickier
+  tmp <- translate_SG(sym_xHM,"xHM","number")
   if (tmp$ans) {
-    SG <- tmp$msg
-    return(SG)
+    sym_num <- tmp$msg
+    for (i in 1:18) {
+      tmp2 <- translate_SG(sym_num,set=i)
+      if (tmp2$ans) {
+        if (sym_xHM == tmp2$msg) return(sym_xHM)
+      }
+    }
   }
+
+  #tmp <- translate_SG(sym_xHM,"xHM","xHM")
+  #if (tmp$ans) {
+  #  SG <- tmp$msg
+  #  return(SG)
+  #}
 
   # Possible inputs
   if (sym_xHM == "P 2") {
@@ -728,25 +742,33 @@ num_symm_settings <- function(SG=NULL) {
     gn <- tmp$msg
     flg <- TRUE
   }
-  tmp <- translate_SG(SG,"ccp4","number")
-  if (tmp$ans) {
-    gn <- tmp$msg
-    flg <- TRUE
+  if (!flg) {
+    tmp <- translate_SG(SG,"ccp4","number")
+    if (tmp$ans) {
+      gn <- tmp$msg
+      flg <- TRUE
+    }
   }
-  tmp <- translate_SG(SG,"xHM","number")
-  if (tmp$ans) {
-    gn <- tmp$msg
-    flg <- TRUE
+  if (!flg) {
+    tmp <- translate_SG(SG,"xHM","number")
+    if (tmp$ans) {
+      gn <- tmp$msg
+      flg <- TRUE
+    }
   }
-  tmp <- translate_SG(SG,"Hall","number")
-  if (tmp$ans) {
-    gn <- tmp$msg
-    flg <- TRUE
+  if (!flg) {
+    tmp <- translate_SG(SG,"Hall","number")
+    if (tmp$ans) {
+      gn <- tmp$msg
+      flg <- TRUE
+    }
   }
-  tmp <- translate_SG(SG,"old","number")
-  if (tmp$ans) {
-    gn <- tmp$msg
-    flg <- TRUE
+  if (!flg) {
+    tmp <- translate_SG(SG,"old","number")
+    if (tmp$ans) {
+      gn <- tmp$msg
+      flg <- TRUE
+    }
   }
 
   # A last attempt, if previous have failed
@@ -768,16 +790,398 @@ num_symm_settings <- function(SG=NULL) {
   nsett <- 0
   lista <- list()
   lista$ans <- TRUE
+  lista$msg <- NULL
   while (lista$ans)
   {
     nsett <- nsett+1
-    lista <- translate_SG(value=gn,SG_in="number",SG_out="xHM",set=nsett)
+    lista <- translate_SG(value=gn,SG_in="number",SG_out="xHM",
+                          set=nsett)
   }
   nsett <- nsett-1
 
   return(nsett)
 }
 
+
+#' Find specific space group setting
+#'
+#' Although a space group is uniquely defined, i.e. the symmetry
+#' operations defining it are uniquely given, the choice of
+#' vectors that defines a unit cell for that symmetry is not
+#' unique. The different choices are known as settings. Most
+#' space groups have only one setting, but it is possible to find
+#' space groups with several settings. For example, "C 1 2/c 1"
+#' has 18 settings. The xHM symbol for setting 1 is
+#' "C 1 2/c 1", the symbol for setting 2 is "A 1 2/n 1", etc.
+#'
+#' @param SG A character string indicating the extended
+#'           Hermann-Mauguin symbol for the space group.
+#' @return set An integer equal to the specific setting
+#'             corresponding to the given xHM symbol.
+#'
+#' @examples
+#' # P2 (group number 4) has three settings
+#' nsets <- find_symm_setting("P 1 2 1")
+#' print(nsets)
+#'
+#' @export
+find_symm_setting <- function(SG) {
+  # Is input a character?
+  ans <- is.character(SG)
+  if (!ans) {
+    msg <- paste("Input needs to be an extended",
+                 "Hermann-Mauguin symbol.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Verify it's a valid symbol
+  ans <- findHM(SG)
+  if (!is.null(ans)) SG <- ans
+  tmp <- translate_SG(SG,SG_in="xHM",SG_out="number")
+  if (!tmp$ans) {
+    msg <- "No space group corresponding to the given symbol.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+  SGnum <- tmp$msg
+
+  # Now check how many settings
+  nsets <- num_symm_settings(SG)
+
+  # Loop until match is found
+  setN <- 0
+  for (i in 1:nsets) {
+    tmp <- translate_SG(SGnum,SG_in="number",SG_out="xHM",set=i)
+    ans <- SG == tmp$msg
+    if (ans) setN <- i
+  }
+
+  # Safety check (if no setting found)
+  if (setN == 0) {
+    msg <- "No setting corresponding to given xHM symbol.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+
+  return(setN)
+}
+
+#' Space group compatible with given cell
+#'
+#' This function returns the space group, among those compatible
+#' with the given unit cell, with the lowest symmetry group
+#' number.
+#'
+#' A given unit cell is compatible with several symmetries.
+#' For example, a cell with different sides and different
+#' angles, also different from 90 degrees, is compatible with
+#' the triclinic lattice system, which corresponds to space
+#' groups P1 and P -1. A cell with different sides, alpha = 90,
+#' gamma=90 and beta different from 90, is compatible with the
+#' monoclinic lattice system, which corresponds to space groups
+#' from number 3 ("P 1 2 1") to number 15 (C 1 2/c 1"). In the
+#' first case this function returns "P 1", while in the second
+#' case it returns "P 1 2 1".
+#'
+#' @param uc An object of class 'unit_cell'.
+#' @return csym An object of class 'cryst_symm', corresponding
+#'              to the selected, lowest symmetry.
+#'
+#' @examples
+#' # Monoclinic cell
+#' uc <- unit_cell(10,20,15,90,110,90)
+#'
+#' # The selected space group is "P 1 2 1"
+#' csym <- lowest_uc_compatible_SG(uc)
+#' print(csym)
+#'
+#' @export
+lowest_uc_compatible_SG <- function(uc) {
+  # Is input a 'unit_cell' object?
+  ans <- check_unit_cell_validity(uc)
+  if (!ans) {
+    msg <- paste("Input is not a valid object",
+                 "of class 'unit_cell'.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Starting group is "P 1"
+  SG <- "P 1"
+
+  # Cell parameters
+  a <- uc$a
+  b <- uc$b
+  c <- uc$c
+  aa <- uc$alpha[1]
+  bb <- uc$beta[1]
+  cc <- uc$gamma[1]
+
+  # Determine lattice system
+  dab <- abs(a-b)
+  dac <- abs(a-c)
+  dbc <- abs(b-c)
+  daabb <- abs(aa-bb)
+  daacc <- abs(aa-cc)
+  dbbcc <- abs(bb-cc)
+  da90 <- abs(aa-90)
+  db90 <- abs(bb-90)
+  dc90 <- abs(cc-90)
+  dc120 <- abs(cc-120)
+
+  ## MONOCLINIC ##
+  # 'P 1 2 1'
+  if (dab > 0.000001 & dac > 0.000001 & dbc > 0.000001 &
+      da90 < 0.000001 & db90 > 0.000001 & dc90 < 0.000001) {
+    SG <- "P 1 2 1"
+  }
+
+  # 'P 1 1 2'
+  if (dab > 0.000001 & dac > 0.000001 & dbc > 0.000001 &
+      da90 < 0.000001 & db90 < 0.000001 & dc90 > 0.000001) {
+    SG <- "P 1 1 2"
+  }
+
+  # 'P 2 1 1'
+  if (dab > 0.000001 & dac > 0.000001 & dbc > 0.000001 &
+      da90 > 0.000001 & db90 < 0.000001 & dc90 < 0.000001) {
+    SG <- "P 2 1 1"
+  }
+
+  ## ORTHOROMBIC ##
+  # 'P 2 2 2'
+  if (dab > 0.000001 & dac > 0.000001 & dbc > 0.000001 &
+      da90 < 0.000001 & db90 < 0.000001 & dc90 < 0.000001) {
+    SG <- "P 2 2 2"
+  }
+
+  ## TETRAGONAL ##
+  # 'P 4'
+  if (dab < 0.000001 & dac > 0.000001 & dbc > 0.000001 &
+      da90 < 0.000001 & db90 < 0.000001 & dc90 < 0.000001) {
+    SG <- "P 4"
+  }
+
+  ## HEXAGONAL (TRIGONAL) ##
+  # 'P 3'
+  if (dab < 0.000001 & dac > 0.000001 & dbc > 0.000001 &
+      da90 < 0.000001 & db90 < 0.000001 & dc120 < 0.000001) {
+    SG <- "P 3"
+  }
+
+  ## ROMBOHEDRAL ##
+  # 'R3 :R'
+  if (dab < 0.000001 & dac < 0.000001 & dbc < 0.000001 &
+      da90 > 0.000001 & db90 > 0.000001 & dc90 > 0.000001 &
+      daabb < 0.000001 & daacc < 0.000001 & dbbcc < 0.000001) {
+    SG <- "R 3 :R"
+  }
+
+  ## CUBIC ##
+  # 'P 2 3'
+  if (dab < 0.000001 & dac < 0.000001 & dbc < 0.000001 &
+      da90 < 0.000001 & db90 < 0.000001 & dc90 < 0.000001) {
+    SG <- "P 2 3"
+  }
+
+  # Object of class 'cryst_symm'
+  csym <- cryst_symm(SG)
+
+  return(csym)
+}
+
+
+#' Cell parameter constrains from symmetry
+#'
+#' This function returns a set of constrains, as string character
+#' expressions, imposed by the specific symmetry group on the
+#' given unit cell.
+#'
+#' Space group symmetry imposes certain constraints on the
+#' values that unit cell parameters can take. For example, the
+#' symmetry represented by the monoclinic space group of extended
+#' Hermann-Mauguin symbol "P 1 2 1" is compatible with a unit cell
+#' in which alpha=gamma=90.
+#'
+#' There is just a handful of constrains for unit cells. Here they
+#' are indicated with the following set of specific strings:
+#' \itemize{
+#'   \item \strong{'No constrains'} Like in a triclinic cell.
+#'   \item \strong{'alpha=90'} The alpha angle is fixed at 90
+#'                           degrees.
+#'   \item \strong{'beta=90'} The beta angle is fixed at 90
+#'                          degrees.
+#'   \item \strong{'gamma=90'} The gamma angle is fixed at 90
+#'                             degrees.
+#'   \item \strong{'gamma=120'} The gamma angle is fixed at 120
+#'                              degrees.
+#'   \item \strong{'alpha=beta=gamma'} The three angle have the
+#'                                     same value, different
+#'                                     from 90 degrees.
+#'   \item \strong{'a=b'} Cell side a is equal to cell side b.
+#'   \item \strong{'a=b=c'} The three cell sides are equal.
+#' }
+#'
+#' @param SG A character string indicating the extended
+#'           Hermann-Mauguin symbol for the space group.
+#' @return vcons A character vector. Each component is a string,
+#'               like 'alpha=90' or 'a=b', that describes the
+#'               type of constrain to be applied to a unit cell
+#'               of a crystal structure with given space group
+#'               symmetry (see above).
+#' @examples
+#' # P 1 1 2 (group number 3) corresponds to setting 2
+#' SG <- translate_SG(3,set=2)
+#'
+#' # Constrains for this symmetry
+#' stmp <- symm_to_cell_const(SG)
+#' print(stmp)
+#'
+#' # R 3 (rombohedral setting)
+#' stmp <- symm_to_cell_const("R 3 :R")
+#' print(stmp)
+#'
+#' @export
+symm_to_cell_const <- function(SG) {
+  ans <- is.character(SG)
+  if (!ans) {
+    msg <- paste("Input needs to be an extended",
+                 "Hermann-Mauguin symbol.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- findHM(SG)
+  if (!is.null(ans)) SG <- ans
+  tmp <- translate_SG(SG,SG_in="xHM",SG_out="number")
+  if (!tmp$ans) {
+    msg <- "No space group corresponding to the given symbol.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Space group number
+  sym_number <- tmp$msg
+
+  # Find correct setting
+  setting <- find_symm_setting(SG)
+
+  # Long list for all space groups and settings
+  vcons <- "No constrains"
+
+  #########################################################################################################################
+  #########
+  #########            TRICLINIC: 1 to 2
+  #########
+  #########################################################################################################################
+  # Nothing to do for sym_number 1
+  # Nothing to do for sym_number 2
+
+  #########################################################################################################################
+  #########
+  #########            MONOCLINIC: 3 to 15
+  #########
+  #########################################################################################################################
+  #
+  # Generic constrains for system
+  if (sym_number >= 3 & sym_number <= 15) {
+    vcons <- c("alpha=90","gamma=90")
+  }
+
+  if (sym_number == 3 | sym_number == 4 | sym_number == 6 |
+      sym_number == 10 | sym_number == 11) {
+    if (setting == 2) vcons <- c("alpha=90","beta=90")
+    if (setting == 3) vcons <- c("beta=90","gamma=90")
+
+    return(vcons)
+  }
+  if (sym_number == 5 | sym_number == 12 | sym_number == 13 |
+      sym_number == 14) {
+    if (setting == 4 | setting == 5 | setting == 6)
+      vcons <- c("alpha=90","beta=90")
+    if (setting == 7 | setting == 8 | setting == 9)
+      vcons <- c("beta=90","gamma=90")
+
+    return(vcons)
+  }
+  if (sym_number == 9 | sym_number == 15) {
+    if (setting == 7 | setting == 8 | setting == 9 |
+        setting == 10 | setting == 11 | setting == 12)
+      vcons <- c("alpha=90","beta=90")
+    if (setting == 13 | setting == 14 | setting == 15 |
+        setting == 16 | setting == 17 | setting == 18)
+      vcons <- c("beta=90","gamma=90")
+
+    return(vcons)
+  }
+
+  #########################################################################################################################
+  #########
+  #########            ORTHOROMBIC: 16 to 74
+  #########
+  #########################################################################################################################
+  #
+  # Generic constrains for system
+  if (sym_number >= 16 & sym_number <= 74) {
+    vcons <- c("alpha=90","beta=90","gamma=90")
+  }
+
+  #########################################################################################################################
+  #########
+  #########            TETRAGONAL: 75 to 142
+  #########
+  #########################################################################################################################
+  # Generic constrains for system
+  if (sym_number >= 75 & sym_number <= 142) {
+    vcons <- c("a=b","alpha=90","beta=90","gamma=90")
+  }
+
+  #########################################################################################################################
+  #########
+  #########            TRIGONAL: 143 to 167
+  #########
+  #########################################################################################################################
+  # Generic constrains for the system
+  if (sym_number >= 143 & sym_number <= 167) {
+    vcons <- c("a=b","alpha=90","beta=90","gamma=120")
+  }
+  if (sym_number == 146 | sym_number == 148 | sym_number == 155 |
+      sym_number == 160 | sym_number == 161 | sym_number == 166 |
+      sym_number == 167) {
+    if (setting == 2) vcons <- c("a=b=c","alpha=beta=gamma")
+
+    return(vcons)
+  }
+
+  #########################################################################################################################
+  #########
+  #########            HEXAGONAL: 168 to 194
+  #########
+  #########################################################################################################################
+  # Generic constrains for the system
+  if (sym_number >= 168 & sym_number <= 194) {
+    vcons <- c("a=b","alpha=90","beta=90","gamma=120")
+  }
+
+  #########################################################################################################################
+  #########
+  #########            CUBIC: 195 to 230
+  #########
+  #########################################################################################################################
+  # # Generic constrains for the system
+  if (sym_number >= 195 & sym_number <= 230) {
+    vcons <- c("a=b=c","alpha=90","beta=90","gamma=90")
+  }
+
+  # This is returned when setting is 1
+  return(vcons)
+}
 
 
 
@@ -848,7 +1252,14 @@ num_symm_settings <- function(SG=NULL) {
 
   bini <- grep("begin_spacegroup",syminfo)
   prima <- bini[length(bini[bini < bsg])]
-  dopo  <- bini[bini > bsg][1]-1   # Add 1 for those cases when prima = dopo
+  dtmp <- bini[bini > bsg][1]
+  if (!is.na(dtmp)) {
+    dopo  <- dtmp-1   # Add 1 for those cases when
+                      # prima = dopo
+  } else {
+    dopo <- length(syminfo)
+  }
+
   if (SG_out == "number")
   {
     key <- "number"
@@ -857,6 +1268,7 @@ num_symm_settings <- function(SG=NULL) {
   {
     key <- paste("symbol",SG_out)
   }
+
   tmp <- syminfo[prima:dopo][grep(key,syminfo[prima:dopo])]
   if (key == "number") translated_value <- strsplit(tmp,"  ")[[1]][2]
   if (key != "number")
@@ -872,7 +1284,14 @@ num_symm_settings <- function(SG=NULL) {
 
   # If output requires number, turn character into numeric
   if (SG_out == "number" | SG_out == "ccp4") translated_value <- as.integer(translated_value)
+
   list_SG <- list(msg=translated_value,ans=TRUE)
+
+  # "Funny" cases at the end of CCP4 syminfo file
+  if (list_SG$ans & (substr(translated_value,1,2) == "NA")) {
+    list_SG$ans <- FALSE
+  }
 
   return(list_SG)
 }
+

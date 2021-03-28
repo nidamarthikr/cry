@@ -4,8 +4,7 @@
 \alias{merged_reflections}
 \title{Constructor for an S3 object of class "merged_reflections".}
 \usage{
-merged_reflections(ruc = NULL, csym = NULL, records = NULL,
-  dtypes = NULL, set = 1)
+merged_reflections(ruc = NULL, csym = NULL, records = NULL, dtypes = NULL)
 }
 \arguments{
 \item{ruc}{An object of class "rec_unit_cell" (which represents
@@ -25,9 +24,6 @@ capital letter) is associated with each type of data.
 For example, a Miller index is of dtype "H"; a structure
 amplitude is of dtype "F"; an anomalous difference is of
 dtype "D"; etc (see details later).}
-
-\item{set}{An integer number corresponding to the specific
-setting for the given space group. Default is 1.}
 }
 \value{
 An object of class "merged_reflections". It is a named
@@ -46,25 +42,54 @@ This represents scaled and merged x-ray data from one crystal.
 }
 \details{
 If the constructor is used without arguments, the default
-object created will be composed of 3 reflections, (1,0,0),
-(0,1,0), (0,0,1) from a cubic crystal with cell of side 10
-angstroms, and symmetry P 2 3. The only available columns
-will be of dtype "H", and named H, K, L (the Miller indices).
+object created will be create reflections for a cubic crystal
+with cell of side 10 angstroms, and symmetry P 2 3, up to 5
+angstroms resolution. The only available columns
+will be of dtype "H", named H, K, L (the Miller indices), and
+of dtype "S", inverse resoluton, named S.
+
+The possible dtypes are:
+\describe{
+  \item{H}{Miller index}
+  \item{S}{Inverse resolution (1/angstroms)}
+  \item{J}{Reflectionn intensity}
+  \item{F}{Amplitude of a structure factor}
+  \item{D}{Anomalous difference}
+  \item{Q}{Standard deviation of J, F, D}
+  \item{G}{Amplitude associated with a Friedel pair (F(+), F(-))}
+  \item{L}{Standard deviation of G}
+  \item{K}{Intensity associated with G (I(+), I(-))}
+  \item{M}{Standard deviation of K}
+  \item{E}{Amplitude of the normalised structure factors}
+  \item{P}{Phase angle (in degrees)}
+  \item{W}{Weight of some sort}
+  \item{A}{Phase probability coefficients (Hendrickson-Lattman)}
+  \item{B}{Batch number (from raw data)}
+  \item{I}{Any other integer}
+  \item{R}{Any other real}
+}
+More vaues can become available in a future release.
 }
 \examples{
 # Create an orthorombic (default) cell
 uc <- unit_cell(10,30,15)
 
 # Create the related reciprocal cell
-ruc <- create_rec_unt_cell(uc)
+ruc <- create_rec_unit_cell(uc)
 
 # Create symmetry (P n c 2)
 csym <- cryst_symm(30)
 
-# Create a few records
+# Create a few records (these include syst. absences)
 records <- expand.grid(H=-2:2,K=-2:2,L=-2:2)
+print(length(records[,1]))
+
+# dtypes are all H
+dtypes <- c("H","H","H")
 
 # Create merged_reflections object with H, K, L
-mrefs <- merged_reflections(ruc,csym,records,set=1)
+# Systematic absences have been eliminated
+mrefs <- merged_reflections(ruc,csym,records,dtypes)
+print(length(mrefs$records[,1]))
 
 }

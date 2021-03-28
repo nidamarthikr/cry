@@ -4,8 +4,15 @@
 \alias{create_unit_cell.default}
 \title{Default method for generic "create_unit_cell"}
 \usage{
-\method{create_unit_cell}{default}(a = NULL, b = NULL, c = NULL,
-  aa = NULL, bb = NULL, cc = NULL, ...)
+\method{create_unit_cell}{default}(
+  a = NULL,
+  b = NULL,
+  c = NULL,
+  aa = NULL,
+  bb = NULL,
+  cc = NULL,
+  ...
+)
 }
 \arguments{
 \item{a}{A real number. One of the unit cell's side lengths, in angstroms.}

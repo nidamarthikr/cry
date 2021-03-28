@@ -4,13 +4,18 @@
 \alias{check_bravais_validity}
 \title{Validity and compatibility of a cry object of class 'bravais'}
 \usage{
-check_bravais_validity(x)
+check_bravais_validity(x, message = FALSE)
 }
 \arguments{
 \item{x}{Object of class 'bravais'.}
+
+\item{message}{A logical variable. If TRUE, the function
+prints a message on the errors, if any
+(default is FALSE, i.e. no message printed).}
 }
 \value{
-ans A logical value. TRUE means that the input is a valid object of class'bravais'.
+ans A logical value. TRUE means that the input is
+            a valid object of class 'bravais'.
 }
 \description{
 An object of class 'bravais' is a named list of length 4. The first slot, "bt", is
@@ -23,6 +28,6 @@ the universally-used two-letter symbol. The second, third and fourth slots are, 
 x <- bravais("mP")
 
 # Check its validity
-check_bravais_validity(x)
+check_bravais_validity(x,TRUE)
 
 }

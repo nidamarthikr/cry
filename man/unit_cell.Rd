@@ -4,8 +4,7 @@
 \alias{unit_cell}
 \title{Constructor for an S3 object of class "unit_cell.}
 \usage{
-unit_cell(a = NULL, b = NULL, c = NULL, aa = NULL, bb = NULL,
-  cc = NULL)
+unit_cell(a = NULL, b = NULL, c = NULL, aa = NULL, bb = NULL, cc = NULL)
 }
 \arguments{
 \item{a}{A real number. One of the unit cell's side lengths, in angstroms.}

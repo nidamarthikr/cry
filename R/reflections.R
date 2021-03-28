@@ -698,28 +698,58 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
 #' symmetry of the crystal.
 #'
 #' @param uc An object of class "unit_cell".
-#' @param csym An object of class "cryst_symm".
+#' @param SG A character string or a number indicating the
+#'           extended Hermann-Mauguin symbol for the space group.
 #' @param reso A real number. The highest data resolution, in
 #'             angstroms.
-#' @param set An integer number corresponding to the specific
-#'            setting for the given space group. Default is 1.
 #' @return hkl A data frame with columns H, K, L corresponding
-#'             to the three Miller indices.
+#'             to the three Miller indices, and a columns S
+#'             corresponding to their inverse resolutions (in
+#'             angstroms).
 #' @examples
-#' Create a C 2 (monoclinic) space group
-#' csym <- cryst_symm("C 2")
+#' C 2 monoclinic space group
+#' SG <- "C 1 2 1"
 #'
 #' # Create an arbitrary cell compatible with C 2
 #' uc <- unit_cell(10,15,10,90,110,90)
 #'
 #' # Generate Miller indices to 5 angstroms resolution
-#' hkl <- generate_miller(uc,csym,reso)
+#' reso <- 5
+#' hkl <- generate_miller(uc,SG,reso)
 #'
 #' # Display first 10 indices
 #' hkl[1:10,]
 #'
 #' @export
-generate_miller <- function(uc,csym,reso,set=1) {
+generate_miller <- function(uc,SG,reso) {
+  # check input
+  ans <- check_unit_cell_validity(uc)
+  if (!ans) {
+    msg <- "'uc' is not a valid 'unit_cell' object.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- is.character(SG)
+  if (!ans) {
+    msg <- paste("Input needs to be an extended",
+                 "Hermann-Mauguin symbol.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Verify it's a valid symbol
+  ans <- findHM(SG)
+  if (!is.null(ans)) SG <- ans
+  tmp <- translate_SG(SG,SG_in="xHM",SG_out="number")
+  if (!tmp$ans) {
+    msg <- "No space group corresponding to the given symbol.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+
   # Cell parameters
   a <- uc$a
   b <- uc$b
@@ -770,16 +800,15 @@ generate_miller <- function(uc,csym,reso,set=1) {
   hkl <- expand.grid(H=-max_h:max_h,K=-max_k:max_k,
                      L=-max_l:max_l)
 
-  # Strictly reflections with resolution lower than reso
-  hkl <- hkl[1/hkl_to_reso(hkl$H,hkl$K,hkl$L,
-                               a,b,c,aa,bb,gg) <= 1/reso,]
-
   # Add inverse of resolution (s) as last column of data frame
   s <- 1/hkl_to_reso(hkl$H,hkl$K,hkl$L,a,b,c,aa,bb,gg)
-  hkl <- cbind(hkl,data.frame(s=s))
+  hkl <- cbind(hkl,data.frame(S=s))
+
+  # Strictly reflections with resolution lower than reso
+  hkl <- hkl[hkl$S <= 1/reso,]
 
   # Eliminate systematic absences from data frame
-  hkl <- deplete_systematic_absences(hkl,csym,set)
+  hkl <- deplete_systematic_absences(hkl,SG)
 
   # Re-number rows
   row.names(hkl) <- 1:length(hkl[,1])
@@ -836,15 +865,14 @@ squared_resolution_coeffs <- function(a,b,c,aa,bb,cc) {
 #'        corresponding to the three Miller indices. This is
 #'        normally the 'record' data frame in an object of
 #'        class "merged_reflections".
-#' @param csym An object of class "cryst_symm".
-#' @param set An integer number corresponding to the specific
-#'            setting for the given space group. Default is 1.
+#' @param SG A character. The extended Hermann-Mauguin symbol
+#'           of the crystallographic space group.
 #' @return hkl The same data frame acquired from input, depleted
 #'             of all systematic absences.
 #'
 #' @examples
-#' # Create a C 2 (monoclinic) space group
-#' csym <- cryst_symm("C 2")
+#' # C 2 monoclinic space group
+#' SG <-"C 1 2 1")
 #'
 #' # Create an arbitrary cell compatible with C 2
 #' uc <- unit_cell(10,15,10,90,110,90)
@@ -856,27 +884,55 @@ squared_resolution_coeffs <- function(a,b,c,aa,bb,cc) {
 #' hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
 #'
 #' # Get rid of systematic absences
-#' new_hkl <- deplete_systematic_absences(hkl,sym)
+#' new_hkl <- deplete_systematic_absences(hkl,SG)
 #'
 #' # Compare first 10 items of original and depleted arrays
 #' hkl[1:10,]
 #' new_hkl[1:10,]
 #'
 #' @export
-deplete_systematic_absences <- function(hkl,csym,set=1) {
+deplete_systematic_absences <- function(hkl,SG) {
+  # Verify inputs
+  ans <- dim(hkl)
+  if(is.null(ans)) {
+    msg <- paste("Input 'hkl' needs to be a nXm array,",
+                 "with m >= 3.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- ans[2] >= 3
+  if (!ans) {
+    msg <- paste("Input 'hkl' needs to be a nXm array,",
+                 "with m >= 3.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- is.character(SG)
+  if (!ans) {
+    msg <- paste("Input needs to be an extended",
+                 "Hermann-Mauguin symbol.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- findHM(SG)
+  if (!is.null(ans)) SG <- ans
+
   # Make a m X 3 matrix of original Miller indices
   hkl2 <- as.matrix(hkl[,1:3])
 
   # Delete incorrect Miller indices if they are
   # systematically-absent
-  idx <- sysabs(hkl2,csym,set)
+  idx <- sysabs(hkl2,SG)
   hkl <- hkl[idx,]
 
   return(hkl)
 }
 
 
-#' Delete systematic absences (Miller indices)
+#' Locate systematic absences
 #'
 #' Given an mX3 matrix of Miller indices, this function returns
 #' those indices corresponding to valid reflections, i.e. to
@@ -894,9 +950,8 @@ deplete_systematic_absences <- function(hkl,csym,set=1) {
 #' @param hkl An mX3 matrix or a data frame whose rows are the
 #'            three integers corresponding to the Miller
 #'            indices.
-#' @param csym An object of class "cryst_symm".
-#' @param set An integer number corresponding to the specific
-#'            setting for the given space group. Default is 1.
+#' @param SG A character. The extended Hermann-Mauguin symbol
+#'           of the crystallographic space group.
 #' @return idx A vector of integers corresponding to the
 #'             position, in the array \code{mhkl}, in which the
 #'             Miller indices ARE NOT systematically absent.
@@ -904,8 +959,9 @@ deplete_systematic_absences <- function(hkl,csym,set=1) {
 #'             can be found using !idx.
 #'
 #' @examples
-#' # Create a C 2 (monoclinic) space group
-#' csym <- cryst_symm("C 2")
+#' # C 2 monoclinic space group (special setting)
+#' SG <- translate_SG(15,set=5)
+#' print(SG)
 #'
 #' # Create an arbitrary cell compatible with C 2
 #' uc <- unit_cell(10,15,10,90,110,90)
@@ -918,7 +974,7 @@ deplete_systematic_absences <- function(hkl,csym,set=1) {
 #'
 #' # Index corresponding to valid reflections
 #' # (not systematic absences)
-#' idx <- sysabs(hkl,csym)
+#' idx <- sysabs(hkl,SG)
 #'
 #' # Indices for all reflections
 #' fulldx <- 1:length(hkl[,1])
@@ -930,14 +986,46 @@ deplete_systematic_absences <- function(hkl,csym,set=1) {
 #' hkl[jdx[1:2],]
 #'
 #' @export
-sysabs  <- function(hkl,csym,set=1) {
-  # Extract symmetry number and setting
-  value <- csym$SG
-  sym_number <- translate_SG(value,SG_in="xHM",
-                             SG_out="number",set=set)
-  if (!sym_number$ans) stop(sym_number$msg)
-  sym_number <- sym_number$msg
-  setting <- set
+sysabs  <- function(hkl,SG) {
+  # Verify inputs
+  ans <- dim(hkl)
+  if(is.null(ans)) {
+    msg <- "Input 'hkl' needs to be a nX3 array.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- ans[2] >= 3
+  if (!ans) {
+    msg <- paste("Input 'hkl' needs to be a nXm array",
+                 " with m >= 3.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- is.character(SG)
+  if (!ans) {
+    msg <- paste("Input needs to be an extended",
+                 "Hermann-Mauguin symbol.\n")
+    cat(msg)
+
+    return(NULL)
+  }
+  ans <- findHM(SG)
+  if (!is.null(ans)) SG <- ans
+  tmp <- translate_SG(SG,SG_in="xHM",SG_out="number")
+  if (!tmp$ans) {
+    msg <- "No space group corresponding to the given symbol.\n"
+    cat(msg)
+
+    return(NULL)
+  }
+
+  # Space group number
+  sym_number <- tmp$msg
+
+  # Find correct setting
+  setting <- find_symm_setting(SG)
 
   # First add a fourth column with 0 to matrix
   nrefs <- nrow(hkl)

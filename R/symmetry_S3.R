@@ -20,6 +20,8 @@
 #'  symbol, but if all fails, a warning is raised and the space group P 1 is assigned.
 #' @param set An integer defining which setting of many possible for the given space group. Some
 #'  crystallographic space groups can be implemented with small variants known as "settings".
+#'  If the input SG is an extended Hermann-Mauguin symbol, set is ignored, as it is already
+#'  specified by the xHM symbol.
 #' @return An object of class "cryst_symm". It is a named list of length 4. The names are, "SG",
 #'  "PG", "T" and "C".
 #' \itemize{
@@ -28,7 +30,7 @@
 #'               the point-group part of the symmetry transformation.}
 #'  \item{3) T. This is a list whose elements are all the \eqn{3\times 1} vectors forming
 #'               the translational part of the symmetry transformation.}
-#'  \item{4) T. This is a list whose elements are all the \eqn{3\times 1} vectors forming
+#'  \item{4) C. This is a list whose elements are all the \eqn{3\times 1} vectors forming
 #'               the centering of the unit cell.}
 #' }
 #'

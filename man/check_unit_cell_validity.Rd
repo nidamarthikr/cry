@@ -4,13 +4,18 @@
 \alias{check_unit_cell_validity}
 \title{Validity and compatibility of a cry object of class 'unit_cell'}
 \usage{
-check_unit_cell_validity(x)
+check_unit_cell_validity(x, message = FALSE)
 }
 \arguments{
 \item{x}{Object of class 'unit_cell'.}
+
+\item{message}{A logical variable. If TRUE, the function
+prints a message on the errors, if any
+(default is FALSE, i.e. no message printed).}
 }
 \value{
-ans A logical value. TRUE means that the input is a valid object of class'unit_cell'.
+ans A logical value. TRUE means that the input is a
+            valid object of class'unit_cell'.
 }
 \description{
 An object of class 'unit_cell' is a named list of length 6. The first three fields are
@@ -23,11 +28,10 @@ x <- create_unit_cell()
 # Check its validity
 check_unit_cell_validity(x)
 
-# Now change two fields
-x$a <- "a"
+# Now change a field
 x$alpha <- 123
 
 # Check validity again
-check_unit_cell_validity(x)
+check_unit_cell_validity(x,TRUE)
 
 }

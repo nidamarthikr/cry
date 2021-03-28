@@ -4,7 +4,7 @@
 \alias{deplete_systematic_absences}
 \title{Deplete systematic absences}
 \usage{
-deplete_systematic_absences(hkl, csym, set = 1)
+deplete_systematic_absences(hkl, SG)
 }
 \arguments{
 \item{hkl}{A data frame with first three columns H, K, L
@@ -12,10 +12,8 @@ corresponding to the three Miller indices. This is
 normally the 'record' data frame in an object of
 class "merged_reflections".}
 
-\item{csym}{An object of class "cryst_symm".}
-
-\item{set}{An integer number corresponding to the specific
-setting for the given space group. Default is 1.}
+\item{SG}{A character. The extended Hermann-Mauguin symbol
+of the crystallographic space group.}
 }
 \value{
 hkl The same data frame acquired from input, depleted
@@ -38,8 +36,8 @@ to a crystal with space group C 2, general reflections like
 indices (2,3,1) are a systematic absence because 2+3=5 (odd).
 }
 \examples{
-# Create a C 2 (monoclinic) space group
-csym <- cryst_symm("C 2")
+# C 2 monoclinic space group
+SG <-"C 1 2 1")
 
 # Create an arbitrary cell compatible with C 2
 uc <- unit_cell(10,15,10,90,110,90)
@@ -51,7 +49,7 @@ ruc <- create_rec_unit_cell(uc)
 hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
 
 # Get rid of systematic absences
-new_hkl <- deplete_systematic_absences(hkl,sym)
+new_hkl <- deplete_systematic_absences(hkl,SG)
 
 # Compare first 10 items of original and depleted arrays
 hkl[1:10,]

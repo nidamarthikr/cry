@@ -4,22 +4,22 @@
 \alias{generate_miller}
 \title{Generate Miller indices}
 \usage{
-generate_miller(uc, csym, reso, set = 1)
+generate_miller(uc, SG, reso)
 }
 \arguments{
 \item{uc}{An object of class "unit_cell".}
 
-\item{csym}{An object of class "cryst_symm".}
+\item{SG}{A character string or a number indicating the
+extended Hermann-Mauguin symbol for the space group.}
 
 \item{reso}{A real number. The highest data resolution, in
 angstroms.}
-
-\item{set}{An integer number corresponding to the specific
-setting for the given space group. Default is 1.}
 }
 \value{
 hkl A data frame with columns H, K, L corresponding
-            to the three Miller indices.
+            to the three Miller indices, and a columns S
+            corresponding to their inverse resolutions (in
+            angstroms).
 }
 \description{
 Function to create a data frame with complete set of Miller
@@ -33,14 +33,15 @@ include systematic absences corresponding to the specific
 symmetry of the crystal.
 }
 \examples{
-Create a C 2 (monoclinic) space group
-csym <- cryst_symm("C 2")
+C 2 monoclinic space group
+SG <- "C 1 2 1"
 
 # Create an arbitrary cell compatible with C 2
 uc <- unit_cell(10,15,10,90,110,90)
 
 # Generate Miller indices to 5 angstroms resolution
-hkl <- generate_miller(uc,csym,reso)
+reso <- 5
+hkl <- generate_miller(uc,SG,reso)
 
 # Display first 10 indices
 hkl[1:10,]

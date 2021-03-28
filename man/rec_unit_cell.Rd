@@ -4,8 +4,14 @@
 \alias{rec_unit_cell}
 \title{Constructor for an S3 object of class "rec_unit_cell.}
 \usage{
-rec_unit_cell(ar = NULL, br = NULL, cr = NULL, aar = NULL,
-  bbr = NULL, ccr = NULL)
+rec_unit_cell(
+  ar = NULL,
+  br = NULL,
+  cr = NULL,
+  aar = NULL,
+  bbr = NULL,
+  ccr = NULL
+)
 }
 \arguments{
 \item{ar}{A real number. One of the reciprocal unit cell's side lengths, in 1/angstroms.}
