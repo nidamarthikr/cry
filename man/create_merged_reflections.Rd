@@ -4,10 +4,10 @@
 \alias{create_merged_reflections}
 \title{S3 generic to create merged_reflections objects}
 \usage{
-create_merged_reflections(a, ...)
+create_merged_reflections(ruc, ...)
 }
 \arguments{
-\item{a}{An object used to select a method.}
+\item{ruc}{An object used to select a method.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }
@@ -18,6 +18,11 @@ specific objects, files, etc.
 \examples{
 # Create a default merged_reflections object (no arguments)
 mrefs <- create_merged_reflections()
+print(mrefs)
+
+# Create merged_reflections object from symmetry
+csym <- cryst_symm("P 3")
+mrefs <- create_merged_reflections(csym=csym)
 print(mrefs)
 
 }

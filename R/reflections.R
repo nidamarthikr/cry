@@ -9,7 +9,7 @@
 #' Reads and output an MTZ header
 #'
 #' @param filename A character string. The path to a valid mtz file.
-#' @param messages A logical variable. If TRUE (default) the function prints
+#' @param message A logical variable. If TRUE (default) the function prints
 #'    a message highlighting what is included in the mtz header.
 #' @return A named list. Each name correspond to a valid field in the mtz
 #'    header.
@@ -21,9 +21,10 @@
 #' print(ltmp$CELL)
 #' print(ltmp$SYMM)
 #' @export
-readMTZHeader <- function(filename,messages=TRUE)
+readMTZHeader <- function(filename,message=TRUE)
 {
-  # Reads and output MTZ header (version running independently of readMTZ)
+  # Reads and output MTZ header (version running independently
+  # of readMTZ)
 
   # Create a connection to binary file
   f <- file(filename, open="rb")
@@ -31,7 +32,8 @@ readMTZHeader <- function(filename,messages=TRUE)
   # Reads initial record
   irdata <- .readIR(f)
   errF <- irdata[[1]]
-  if (errF != 0) stop("readMTZ: MTZ binary file does not contain initial \"MTZ \" tag. It is either a badly formatted or a wrong MTZ file.")
+  if (errF != 0)
+  stop("readMTZ: MTZ binary file does not contain initial \"MTZ \" tag. It is either a badly formatted or a wrong MTZ file.")
 
   # Work out how many reflection records are contained in this MTZ file (= nref X ncols)
   numDataItems <- irdata[[2]] - 20 - 1
@@ -41,7 +43,7 @@ readMTZHeader <- function(filename,messages=TRUE)
   if (irdata[[3]] == -1) reflnData <- readBin(f, "numeric", n=numDataItems, size=4,endian="big")
 
   # Load header information
-  hData <- .readH(f,messages)
+  hData <- .readH(f,message)
 
   # Close connection
   close(f)
@@ -51,27 +53,34 @@ readMTZHeader <- function(filename,messages=TRUE)
 }
 
 
-#' Reads and output the full content of an MTZ file
+#' Load an MTZ file
 #'
-#' Reads mtz files and store both header information and reflection data
-#' records in named lists. A third list is used, if the mtz file is an
-#' unmerged file, for storing batch headers.
+#' Reads mtz files and store both header information and
+#' reflection data records in named lists. A third list is
+#' used, if the mtz file is an unmerged file, for storing batch
+#' headers.
 #'
-#' @param filename A character string. The path to a valid mtz file.
-#' @param messages A logical variable. If TRUE (default) the function prints
-#'    a message highlighting data included in the mtz file.
-#' @return A named list of length 3. The first element is called "reflections"
-#'    and is a dataframe with as many columns as are included in the mtz file.
-#'    The name of each column of the dataframe coincides with the name of the
-#'    corresponding column in the mtz. The second element is called "header"
-#'    and is a named list in which each name correspond to a valid field in
-#'    the mtz header. The third element is called "batch_header" and is a
-#'    list with as many elements as the number of batches (images)
-#'    included in the mtz file. Each list element is, itself, a named list
-#'    including all the useful variables stored in batch headers. If no batch
-#'    headers are contained in the file (merged mtz), the batch_header
-#'    element is NULL.
+#' @param filename A character string. The path to a valid mtz
+#'                 file.
+#' @param message A logical variable. If TRUE (default) the
+#'                function prints a message highlighting data
+#'                included in the mtz file.
+#' @return A named list of length 3. The first element is
+#'         called "reflections" and is a dataframe with as
+#'         many columns as are included in the mtz file.
+#'         The name of each column of the dataframe coincides
+#'         with the name of the corresponding column in the mtz.
+#'         The second element is called "header" and is a named
+#'         list in which each name correspond to a valid field
+#'         in the mtz header. The third element is called
+#'         "batch_header" and is a list with as many elements as
+#'         the number of batches (images) included in the mtz
+#'         file. Each list element is, itself, a named list
+#'         including all the useful variables stored in batch
+#'         headers. If no batch headers are contained in the file
+#'         (merged mtz), the batch_header element is NULL.
 #' @examples
+#'
 #' datadir <- system.file("extdata",package="cry")
 #' filename <- file.path(datadir,"insulin_merged.mtz")
 #' ltmp <- readMTZ(filename)
@@ -84,8 +93,9 @@ readMTZHeader <- function(filename,messages=TRUE)
 #' refs <- ltmp$reflections
 #' print(colnames(refs))
 #' print(range(refs$H))
+#'
 #' @export
-readMTZ <- function(filename, messages = TRUE){
+readMTZ <- function(filename, message = TRUE){
 
   ################################################################################
   ## a function for reading an MTZ file                                         ##
@@ -116,7 +126,7 @@ readMTZ <- function(filename, messages = TRUE){
   if (length(idx) > 0) reflnData[idx] <- NA
 
   # Load header information
-  hData <- .readH(f,messages)
+  hData <- .readH(f,message)
   hF <- hData[[2]]                                    # hF == 1 means no batch headers
   # Turn reflnData into a dataframe where columns are named
   tmpmatrix <- matrix(data=reflnData,nrow=hData[[1]]$NCOL[2],ncol=hData[[1]]$NCOL[1],
@@ -334,7 +344,7 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
 # is called l_data and is another list with as many elements as the various fields
 # in the mtz header. The second element is called hF and is an integer. 0
 # means that the reading has gone ok.
-.readH <- function(f,messages)
+.readH <- function(f,message)
 {
   # Given a connection f corresponding to the binary MTZ file immediately
   # after end of reflection records, this function keeps reading the file
@@ -467,7 +477,7 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
       col_min <- c(col_min,fields[4])
       col_max <- c(col_max,fields[5])
       col_id <- c(col_id,fields[6])
-      if (messages) print(hdata)
+      if (message) print(hdata)
     }
     if (endTag == "COLSRC")
     {
@@ -707,7 +717,7 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
 #'             corresponding to their inverse resolutions (in
 #'             angstroms).
 #' @examples
-#' C 2 monoclinic space group
+#' # C 2 monoclinic space group
 #' SG <- "C 1 2 1"
 #'
 #' # Create an arbitrary cell compatible with C 2
@@ -872,7 +882,7 @@ squared_resolution_coeffs <- function(a,b,c,aa,bb,cc) {
 #'
 #' @examples
 #' # C 2 monoclinic space group
-#' SG <-"C 1 2 1")
+#' SG <-"C 1 2 1"
 #'
 #' # Create an arbitrary cell compatible with C 2
 #' uc <- unit_cell(10,15,10,90,110,90)
@@ -960,27 +970,21 @@ deplete_systematic_absences <- function(hkl,SG) {
 #'
 #' @examples
 #' # C 2 monoclinic space group (special setting)
-#' SG <- translate_SG(15,set=5)
-#' print(SG)
-#'
-#' # Create an arbitrary cell compatible with C 2
-#' uc <- unit_cell(10,15,10,90,110,90)
-#'
-#' # Crete the related reciprocal cell
-#' ruc <- create_rec_unit_cell(uc)
+#' csym <- cryst_symm(15,set=5)
+#' print(csym$SG)
 #'
 #' # Create a full data frame of Miller indices
 #' hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
 #'
 #' # Index corresponding to valid reflections
 #' # (not systematic absences)
-#' idx <- sysabs(hkl,SG)
+#' idx <- sysabs(hkl,csym$SG)
 #'
 #' # Indices for all reflections
 #' fulldx <- 1:length(hkl[,1])
 #'
 #' # Index corresponding to systematic absences
-#' jdx <- fulldx[-idx,]
+#' jdx <- fulldx[-idx]
 #'
 #' # A couple of systematic absences
 #' hkl[jdx[1:2],]
@@ -2454,8 +2458,8 @@ sysabs  <- function(hkl,SG) {
   if (sym_number == 65)
   {
     if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
-    if (setting == 2) hkl[(hkl[,2]+hkl[,l])%%2 != 0,4] <- NA
-    if (setting == 3) hkl[(hkl[,1]+hkl[,l])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,1])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,1])%%2 != 0,4] <- NA
   }
   if (sym_number == 66)
   {
@@ -2475,8 +2479,8 @@ sysabs  <- function(hkl,SG) {
       hkl[hkl[,1] == 0 & hkl[,2] != 0 & hkl[,3] != 0 & hkl[,2]%%2 != 0,4] <- NA
     }
     if (setting == 1) hkl[(hkl[,1]+hkl[,2])%%2 != 0,4] <- NA
-    if (setting == 2) hkl[(hkl[,2]+hkl[,l])%%2 != 0,4] <- NA
-    if (setting == 3) hkl[(hkl[,1]+hkl[,l])%%2 != 0,4] <- NA
+    if (setting == 2) hkl[(hkl[,2]+hkl[,1])%%2 != 0,4] <- NA
+    if (setting == 3) hkl[(hkl[,1]+hkl[,1])%%2 != 0,4] <- NA
   }
   if (sym_number == 67)
   {

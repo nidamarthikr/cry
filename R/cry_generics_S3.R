@@ -22,6 +22,7 @@
 #' @importFrom stats na.omit sd
 #' @importFrom utils read.table write.table
 #' @importFrom methods is
+#' @importFrom stats complete.cases
 #' @export
 create_unit_cell <- function(a,...) UseMethod("create_unit_cell")
 
@@ -65,11 +66,16 @@ calculate_cell_volume <- function(x,...) UseMethod("calculate_cell_volume")
 #' The merged_reflections object can be created starting from
 #' specific objects, files, etc.
 #'
-#' @param a An object used to select a method.
+#' @param ruc An object used to select a method.
 #' @param ... Further arguments passed to or from other methods.
 #' @examples
 #' # Create a default merged_reflections object (no arguments)
 #' mrefs <- create_merged_reflections()
+#' print(mrefs)
+#'
+#' # Create merged_reflections object from symmetry
+#' csym <- cryst_symm("P 3")
+#' mrefs <- create_merged_reflections(csym=csym)
 #' print(mrefs)
 #'
 #' @importFrom graphics hist
@@ -77,5 +83,5 @@ calculate_cell_volume <- function(x,...) UseMethod("calculate_cell_volume")
 #' @importFrom utils read.table write.table
 #' @importFrom methods is
 #' @export
-create_merged_reflections <- function(a,...)
+create_merged_reflections <- function(ruc,...)
   UseMethod("create_merged_reflections")

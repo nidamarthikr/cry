@@ -2,35 +2,42 @@
 % Please edit documentation in R/reflections.R
 \name{readMTZ}
 \alias{readMTZ}
-\title{Reads and output the full content of an MTZ file}
+\title{Load an MTZ file}
 \usage{
-readMTZ(filename, messages = TRUE)
+readMTZ(filename, message = TRUE)
 }
 \arguments{
-\item{filename}{A character string. The path to a valid mtz file.}
+\item{filename}{A character string. The path to a valid mtz
+file.}
 
-\item{messages}{A logical variable. If TRUE (default) the function prints
-a message highlighting data included in the mtz file.}
+\item{message}{A logical variable. If TRUE (default) the
+function prints a message highlighting data
+included in the mtz file.}
 }
 \value{
-A named list of length 3. The first element is called "reflections"
-   and is a dataframe with as many columns as are included in the mtz file.
-   The name of each column of the dataframe coincides with the name of the
-   corresponding column in the mtz. The second element is called "header"
-   and is a named list in which each name correspond to a valid field in
-   the mtz header. The third element is called "batch_header" and is a
-   list with as many elements as the number of batches (images)
-   included in the mtz file. Each list element is, itself, a named list
-   including all the useful variables stored in batch headers. If no batch
-   headers are contained in the file (merged mtz), the batch_header
-   element is NULL.
+A named list of length 3. The first element is
+        called "reflections" and is a dataframe with as
+        many columns as are included in the mtz file.
+        The name of each column of the dataframe coincides
+        with the name of the corresponding column in the mtz.
+        The second element is called "header" and is a named
+        list in which each name correspond to a valid field
+        in the mtz header. The third element is called
+        "batch_header" and is a list with as many elements as
+        the number of batches (images) included in the mtz
+        file. Each list element is, itself, a named list
+        including all the useful variables stored in batch
+        headers. If no batch headers are contained in the file
+        (merged mtz), the batch_header element is NULL.
 }
 \description{
-Reads mtz files and store both header information and reflection data
-records in named lists. A third list is used, if the mtz file is an
-unmerged file, for storing batch headers.
+Reads mtz files and store both header information and
+reflection data records in named lists. A third list is
+used, if the mtz file is an unmerged file, for storing batch
+headers.
 }
 \examples{
+
 datadir <- system.file("extdata",package="cry")
 filename <- file.path(datadir,"insulin_merged.mtz")
 ltmp <- readMTZ(filename)
@@ -43,4 +50,5 @@ print(class(ltmp$batch_header))
 refs <- ltmp$reflections
 print(colnames(refs))
 print(range(refs$H))
+
 }

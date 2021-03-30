@@ -2,28 +2,56 @@
 % Please edit documentation in R/readXDS_ASCII.R
 \name{readXDS_ASCII}
 \alias{readXDS_ASCII}
-\title{Reads XDS file with header and reflections.}
+\title{Load an XDS_ASCII file.}
 \usage{
-readXDS_ASCII(filename, message = TRUE, ISIGMA = 1)
+readXDS_ASCII(filename, message = FALSE)
 }
 \arguments{
-\item{filename}{A character string. The path to a valid xds file.}
+\item{filename}{A character string. The path to a valid
+XDS ASCII file.}
 
-\item{ISIGMA}{A numerical value, which the default value is 1}
-
-\item{messages}{A logical variable. If TRUE (default) the function prints
-a message highlighting what is included in the xds header.}
+\item{message}{A logical variable. If TRUE (default) the
+function prints a message highlighting what is
+included in the xds header.}
 }
 \value{
-A named list. Each name correspond to a valid field in the xds
-   header.
+A named list (see details).
 }
 \description{
-ISIGMA will cut the data following the wished I over sigma
+Function to load XDS_ASCII.HKL files into a named list with
+three components called \emph{processing_info}, \emph{header}
+and \emph{reflections} (see details further down).
+}
+\details{
+This function reads in all data from an XDS_ASCII data file
+and organises tham into a named list. The list's name are:
+\describe{
+  \item{processing_info}{This list component includes three
+        logical variables, MERGE, FRIEDEL and PROFILE. Their
+        TRUE/FALSE value reflect features of the XDS_ASCII
+        file connected with the specific processing performed
+        to obtain the file itself
+        (for more details see \url{https://xds.mr.mpg.de/}).}
+   \item{header}{This list includes several components, like
+                 for instance SPACE_GROUP_NUMBER or
+                 UNIT_CELL_CONSTANTS, which give informations
+                 on the crystal and the experiment generating
+                 the data.}
+   \item{reflections}{This data.frame includes the actual
+                     experimental data, i.e. the observations
+                     collected during the X-ray diffraction
+                     experiment on the crystal (or crystals).
+                     The number and type of columns can vary.}
+}
 }
 \examples{
-\dontrun{
-filename <- "path/to/a/valid/HKL/file.HKL"
-xds_ascii <- readXDS_ASCII(filename)
-}
+
+# Load one of the XDS ASCII files included with
+# this distribution of cry
+datadir <- system.file("extdata",package="cry")
+filename <- file.path(datadir,"xds_ascii_01.hkl")
+ltmp <- readXDS_ASCII(filename,message=FALSE)
+print(names(ltmp))
+print(ltmp$reflections[1:5,])
+
 }

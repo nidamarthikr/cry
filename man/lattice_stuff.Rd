@@ -46,7 +46,7 @@ Calculation of useful lattice parameters
 \examples{
 datadir <- system.file("extdata",package="cry")
 fname <- file.path(datadir,"insulin_merged.mtz")
-hdr <- readMTZHeader(fname,messages=FALSE)
+hdr <- readMTZHeader(fname,message=FALSE)
 ucell <- hdr$CELL
 vtmp <- lattice_stuff(ucell[1],ucell[2],ucell[3],ucell[4],ucell[5],ucell[6])
 vtmp[1:3]

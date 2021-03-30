@@ -38,27 +38,21 @@ indices (2,3,1) are a systematic absence because 2+3=5 (odd).
 }
 \examples{
 # C 2 monoclinic space group (special setting)
-SG <- translate_SG(15,set=5)
-print(SG)
-
-# Create an arbitrary cell compatible with C 2
-uc <- unit_cell(10,15,10,90,110,90)
-
-# Crete the related reciprocal cell
-ruc <- create_rec_unit_cell(uc)
+csym <- cryst_symm(15,set=5)
+print(csym$SG)
 
 # Create a full data frame of Miller indices
 hkl <- expand.grid(H=-4:4,K=-4:4,L=-4:4)
 
 # Index corresponding to valid reflections
 # (not systematic absences)
-idx <- sysabs(hkl,SG)
+idx <- sysabs(hkl,csym$SG)
 
 # Indices for all reflections
 fulldx <- 1:length(hkl[,1])
 
 # Index corresponding to systematic absences
-jdx <- fulldx[-idx,]
+jdx <- fulldx[-idx]
 
 # A couple of systematic absences
 hkl[jdx[1:2],]

@@ -37,7 +37,7 @@
 #' @examples
 #' datadir <- system.file("extdata",package="cry")
 #' fname <- file.path(datadir,"insulin_merged.mtz")
-#' hdr <- readMTZHeader(fname,messages=FALSE)
+#' hdr <- readMTZHeader(fname,message=FALSE)
 #' ucell <- hdr$CELL
 #' vtmp <- lattice_stuff(ucell[1],ucell[2],ucell[3],ucell[4],ucell[5],ucell[6])
 #' vtmp[1:3]
@@ -102,7 +102,7 @@ lattice_stuff <- function(a,b,c,aa,bb,cc)
 #' @examples
 #' datadir <- system.file("extdata",package="cry")
 #' fname <- file.path(datadir,"insulin_merged.mtz")
-#' hdr <- readMTZHeader(fname,messages=FALSE)
+#' hdr <- readMTZHeader(fname,message=FALSE)
 #' ucell <- hdr$CELL
 #' reso1 <- hkl_to_reso(1,0,0,ucell[1],ucell[2],ucell[3],ucell[4],ucell[5],ucell[6])
 #' print(reso1)  # Low resolution

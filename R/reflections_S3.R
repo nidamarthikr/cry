@@ -385,7 +385,7 @@ print.merged_reflections <- function(x,...) {
 #'        For example, a Miller index is of dtype "H"; a structure
 #'        amplitude is of dtype "F"; an anomalous difference is of
 #'        dtype "D"; etc (see details later).
-#' @params ... Additional arguments passed to the
+#' @param ... Additional arguments passed to the
 #'             create_merged_reflections methods.
 #' @return An object of class "merged_reflections". It is a named
 #'         list of length 4 whose names are:

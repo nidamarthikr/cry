@@ -6,69 +6,445 @@
 # Useful S3-type functions for handy use outside the main S4 framework
 
 
-#' Reads XDS file with header and reflections.
+#' Load an XDS_ASCII file's header.
 #'
-#' @param filename A character string. The path to a valid xds file.
-#' @param messages A logical variable. If TRUE (default) the function prints
-#'    a message highlighting what is included in the xds header.
-#' @param ISIGMA A numerical value, which the default value is 1
-#' @return A named list. Each name correspond to a valid field in the xds
-#'    header.
-#' @description ISIGMA will cut the data following the wished I over sigma
+#' This function reads information from the header of an
+#' XDS_ASCII.HKL data file and organises it into a named list
+#' with a variable number of components, according to the type
+#' of XDS_ASCII.HKL file (see details in
+#' \code{\link{readXDS_ASCII}}).
+#'
+#' @param filename A character string. The path to a valid
+#'                 XDS ASCII file.
+#' @return A named list. Each name correspond to a valid field in
+#'         the xds header.
+#'
 #' @examples
-#' \dontrun{
-#' filename <- "path/to/a/valid/HKL/file.HKL"
-#' xds_ascii <- readXDS_ASCII(filename)
-#' }
+#'
+#' # Load one of the XDS ASCII files included with
+#' # this distribution of cry
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"xds_ascii_01.hkl")
+#' ltmp <- readXDS_ASCII_Header(filename)
+#' print(names(ltmp))
+#'
 #' @export
+readXDS_ASCII_Header <- function(filename) {
+  # Open file connection
+  ff <- file(filename)
 
-#filename = "/Users/ritagiordano/Documents/ECM30/Files/XDS.HKL"
+  # Read in all lines
+  lXDS <- readLines(ff,warn=FALSE)
 
-readXDS_ASCII<-function(filename, message = TRUE, ISIGMA = 1) {
-  # Read XDS_ASCII.HKL file from xds data processing.
-  # Determine the number of row present in the file.
-  # create and open a connection to the xds file.
-  xds <- read.table(filename, comment.char = "!")
-  colnames(xds)<-c("H","K","L","Iobs","Sigma_Iobs", "XD", "YD", "ZD", "RLP", "PEAK", "CORR", "PSI")
-  ISIG <- xds$Iobs/xds$Sigma_Iobs
-  xds <- cbind(xds, ISIG)
-  if (ISIGMA != 1)
-  {
-    xds <- xds[xds$ISIG <= ISIGMA, ]
+  # Select lines starting with '!'
+  tmp <- substr(lXDS,1,1)
+  idx <- which(tmp == "!")
+  lXDS <- lXDS[idx]
+
+  # Close connection
+  close(ff)
+
+  # Is it an XDS ASCII?
+  idx <- grep("FORMAT=XDS_ASCII",lXDS)
+  if (length(idx) != 1) {
+    msg <- "Not a valid XDS ASCII file.\n"
+    cat(msg)
+
+    return(NULL)
   }
-  return(xds)
+
+  # Final list (this function only fills first two fields)
+  outlist <- list(processing_info=list(),header=list(),
+                  reflections=list())
+
+  ### processing_info section ###
+
+  # Merge
+  idx <- grep("MERGE",lXDS)
+  stmp <- strsplit(lXDS[idx],"  ")[[1]]
+  jdx <- grep("MERGE",stmp)
+  outlist$processing_info$MERGE <-
+    as.logical(substr(stmp[jdx],7,11))
+
+  # Friedel
+  jdx <- grep("FRIEDEL",stmp)
+  outlist$processing_info$FRIEDEL <-
+    as.logical(substr(stmp[jdx],15,19))
+
+  # Profile fitting
+  idx <- grep("PROFILE_FITTING",lXDS)
+  tmp <- substr(lXDS[idx],18,nchar(lXDS[idx]))
+  tmp <- as.logical(trimws(tmp,"both"))
+  outlist$processing_info$PROFILE_FITTING <- tmp
+
+  ### header section ###
+
+  # Data range
+  idx <- grep("DATA_RANGE",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$DATA_RANGE <- c(as.numeric(stmp[jdx[2]]),
+                                   as.numeric(stmp[jdx[3]]))
+  }
+
+  # Rotation axis
+  idx <- grep("ROTATION_AXIS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$ROTATION_AXIS <- c(as.numeric(stmp[jdx[2]]),
+                                      as.numeric(stmp[jdx[3]]),
+                                      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Oscillation range
+  idx <- grep("OSCILLATION_RANGE",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$OSCILLATION_RANGE <- as.numeric(stmp[jdx[2]])
+  }
+
+  # Starting angle
+  idx <- grep("STARTING_ANGLE",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$STARTING_ANGLE <- as.numeric(stmp[jdx[2]])
+  }
+
+  # Starting frame
+  idx <- grep("STARTING_FRAME",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$STARTING_FRAME <- as.numeric(stmp[jdx[2]])
+  }
+
+  # Resolution range
+  idx <- grep("INCLUDE_RESOLUTION_RANGE",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$INCLUDE_RESOLUTION_RANGE <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]))
+  }
+
+  # Space group
+  idx <- grep("SPACE_GROUP_NUMBER",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$SPACE_GROUP_NUMBER <- as.integer(stmp[jdx[2]])
+  }
+
+  # Unit cell
+  idx <- grep("UNIT_CELL_CONSTANTS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$UNIT_CELL_CONSTANTS <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]),
+      as.numeric(stmp[jdx[5]]),
+      as.numeric(stmp[jdx[6]]),
+      as.numeric(stmp[jdx[7]]))
+  }
+
+  # Unit cell A axis
+  idx <- grep("UNIT_CELL_A-AXIS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$UNIT_CELL_AAXIS <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Unit cell B axis
+  idx <- grep("UNIT_CELL_B-AXIS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$UNIT_CELL_BAXIS <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Unit cell C axis
+  idx <- grep("UNIT_CELL_C-AXIS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$UNIT_CELL_CAXIS <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Reflecting range
+  idx <- grep("REFLECTING_RANGE_E.S.D.",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$REFLECTING_RANGE_E.S.D. <-
+      as.numeric(stmp[jdx[2]])
+  }
+
+  # Beam divergence
+  idx <- grep("BEAM_DIVERGENCE_E.S.D.",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$BEAM_DIVERGENCE_E.S.D. <-
+      as.numeric(stmp[jdx[2]])
+  }
+
+  # Wavelength
+  idx <- grep("X-RAY_WAVELENGTH",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"  ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$XRAY_WAVELENGTH <- as.numeric(stmp[jdx[2]])
+  }
+
+  # Incident beam direction
+  idx <- grep("INCIDENT_BEAM_DIRECTION",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$INCIDENT_BEAM_DIRECTION <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Fraction of polarization
+  idx <- grep("FRACTION_OF_POLARIZATION",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$FRACTION_OF_POLARIZATION <- c(
+      as.numeric(stmp[jdx[2]]))
+  }
+
+  # Polarization plane normal
+  idx <- grep("POLARIZATION_PLANE_NORMAL",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$POLARIZATION_PLANE_NORMAL <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Air
+  idx <- grep("AIR",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$AIR <- c(
+      as.numeric(stmp[jdx[2]]))
+  }
+
+  # Silicon
+  idx <- grep("SILICON",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$SILICON <- c(
+      as.numeric(stmp[jdx[2]]))
+  }
+
+  # Sensor thickness
+  idx <- grep("SENSOR_THICKNESS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$SENSOR_THICKNESS <- c(
+      as.numeric(stmp[jdx[2]]))
+  }
+
+  # Type of detector
+  idx <- grep("DETECTOR=",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx],"=")
+    stmp <- trimws(stmp[[1]][2],"both")
+    outlist$header$DETECTOR <- stmp
+  }
+
+  # Overload
+  idx <- grep("OVERLOAD",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$OVERLOAD <- c(
+      as.numeric(stmp[jdx[2]]))
+  }
+
+  # NX, NY, QX, QY
+  idx <- grep("!NX",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$NX_NY_QX_QY <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[4]]),
+      as.numeric(stmp[jdx[6]]),
+      as.numeric(stmp[jdx[8]]))
+  }
+
+  # ORGXX, ORGY
+  idx <- grep("!ORGX",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$ORGX_ORGY <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Detector distance
+  idx <- grep("DETECTOR_DISTANCE",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$DETECTOR_DISTANCE <- c(
+      as.numeric(stmp[jdx[2]]))
+  }
+
+  # Direction of detector (X)
+  idx <- grep("DIRECTION_OF_DETECTOR_X-AXIS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$DIRECTION_OF_DETECTOR_XAXIS <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Direction of detector (Y)
+  idx <- grep("DIRECTION_OF_DETECTOR_Y-AXIS",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$DIRECTION_OF_DETECTOR_YAXIS <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]),
+      as.numeric(stmp[jdx[4]]))
+  }
+
+  # Variance model
+  idx <- grep("VARIANCE_MODEL",lXDS)
+  if (length(idx) == 1) {
+    stmp <- strsplit(lXDS[idx]," ")[[1]]
+    jdx <- which(nchar(stmp) != 0)
+    outlist$header$VARIANCE_MODEL <- c(
+      as.numeric(stmp[jdx[2]]),
+      as.numeric(stmp[jdx[3]]))
+  }
+
+  ## Final: info on records
+  idx <- grep("NUMBER_OF_ITEMS_IN_EACH_DATA_RECORD",lXDS)
+  if (length(idx) == 1) {
+    nrec <- as.integer(strsplit(lXDS[idx],"=")[[1]][2])
+  }
+  rtmp <- c()
+  for (i in 1:nrec) {
+    stmp <- strsplit(lXDS[idx+i],"=")[[1]][1]
+    rec_name <- strsplit(stmp,"_")[[1]][2]
+    rtmp <- c(rtmp,rec_name)
+  }
+  outlist$header$RECORD_NAMES <- rtmp
+
+  return(outlist)
 }
 
-# readXDSHeader <- function(filename, message = TRUE)
-# {
-#   f_xds<-file(filename,open="r")
-#   header <- .extract_RE_xds(filename, message)
-#   return(header)
-# }
 
-## Function to write new XDS_ASCII.HKL
-#' Write a new XDS file with header and reflections.
+
+#' Load an XDS_ASCII file.
 #'
-#' @param filename A character string. The path to a valid xds file.
-#' @param messages A logical variable. If TRUE (default) the function prints
-#'    a message highlighting what is included in the xds header.
-#' @param path A numerical value, which the default value is 1
-#' @return A named list. Each name correspond to a valid field in the xds
-#'    header.
+#' Function to load XDS_ASCII.HKL files into a named list with
+#' three components called \emph{processing_info}, \emph{header}
+#' and \emph{reflections} (see details further down).
+#'
+#' This function reads in all data from an XDS_ASCII data file
+#' and organises tham into a named list. The list's name are:
+#' \describe{
+#'   \item{processing_info}{This list component includes three
+#'         logical variables, MERGE, FRIEDEL and PROFILE. Their
+#'         TRUE/FALSE value reflect features of the XDS_ASCII
+#'         file connected with the specific processing performed
+#'         to obtain the file itself
+#'         (for more details see \url{https://xds.mr.mpg.de/}).}
+#'    \item{header}{This list includes several components, like
+#'                  for instance SPACE_GROUP_NUMBER or
+#'                  UNIT_CELL_CONSTANTS, which give informations
+#'                  on the crystal and the experiment generating
+#'                  the data.}
+#'    \item{reflections}{This data.frame includes the actual
+#'                      experimental data, i.e. the observations
+#'                      collected during the X-ray diffraction
+#'                      experiment on the crystal (or crystals).
+#'                      The number and type of columns can vary.}
+#' }
+#'
+#' @param filename A character string. The path to a valid
+#'                 XDS ASCII file.
+#' @param message A logical variable. If TRUE (default) the
+#'                function prints a message highlighting what is
+#'                included in the xds header.
+#' @return A named list (see details).
 #'
 #' @examples
-#' \dontrun{
-#' filename <- "path/to/a/valid/HKL/file.HKL"
-#' ltmp <- readXDS(filename)
+#'
+#' # Load one of the XDS ASCII files included with
+#' # this distribution of cry
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"xds_ascii_01.hkl")
+#' ltmp <- readXDS_ASCII(filename,message=FALSE)
 #' print(names(ltmp))
-#' print(ltmp$UNIT_CELL_CONSTANTS)
-#' }
+#' print(ltmp$reflections[1:5,])
+#'
 #' @export
+readXDS_ASCII <- function(filename,message =FALSE) {
+  # Read header first
+  lXDS <- readXDS_ASCII_Header(filename)
 
-# writeXDS_ASCII <- function(filename, path, append = FALSE, message = TRUE)
-# {
-#   f_xds <- file(filename, open = "rw")
-#   xds <- write(f_xds, path, append = FALSE)
-# }
+  # Column names
+  cnames <- lXDS$header$RECORD_NAMES
 
+  # Read records from XDS_ASCII
+  lXDS$reflections <- read.table(filename,
+                    col.names=cnames,comment.char = "!")
 
+  #ISIG <- xds$Iobs/xds$Sigma_Iobs
+  #xds <- cbind(xds, ISIG)
+  #if (ISIGMA != 1)
+  #{
+  #  xds <- xds[xds$ISIG <= ISIGMA, ]
+  #}
+
+  # Collect some statistics
+  nrefs <- length(lXDS$reflections[,1])
+  isigi <- lXDS$reflections$IOBS/lXDS$reflections$SIGMA.IOBS.
+  msg <- c("\n")
+  if (message) {
+    msg <- c(msg,sprintf("File %s read successfully.\n",filename))
+    msg2 <- sprintf("There are %d reflections in this file.\n",nrefs)
+    msg <- c(msg,msg2)
+    msg <- c(msg,"Here is a summary of the observations:\n")
+    msg <- c(msg,"\n")
+    cat(msg)
+    print(summary(isigi))
+  }
+
+  return(lXDS)
+}

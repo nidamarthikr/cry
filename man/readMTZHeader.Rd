@@ -4,12 +4,12 @@
 \alias{readMTZHeader}
 \title{Reads and output an MTZ header}
 \usage{
-readMTZHeader(filename, messages = TRUE)
+readMTZHeader(filename, message = TRUE)
 }
 \arguments{
 \item{filename}{A character string. The path to a valid mtz file.}
 
-\item{messages}{A logical variable. If TRUE (default) the function prints
+\item{message}{A logical variable. If TRUE (default) the function prints
 a message highlighting what is included in the mtz header.}
 }
 \value{

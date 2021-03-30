@@ -37,7 +37,7 @@ indices (2,3,1) are a systematic absence because 2+3=5 (odd).
 }
 \examples{
 # C 2 monoclinic space group
-SG <-"C 1 2 1")
+SG <-"C 1 2 1"
 
 # Create an arbitrary cell compatible with C 2
 uc <- unit_cell(10,15,10,90,110,90)

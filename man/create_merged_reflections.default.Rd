@@ -28,6 +28,9 @@ capital letter) is associated with each type of data.
 For example, a Miller index is of dtype "H"; a structure
 amplitude is of dtype "F"; an anomalous difference is of
 dtype "D"; etc (see details later).}
+
+\item{...}{Additional arguments passed to the
+create_merged_reflections methods.}
 }
 \value{
 An object of class "merged_reflections". It is a named

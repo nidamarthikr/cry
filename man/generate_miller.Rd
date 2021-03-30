@@ -33,7 +33,7 @@ include systematic absences corresponding to the specific
 symmetry of the crystal.
 }
 \examples{
-C 2 monoclinic space group
+# C 2 monoclinic space group
 SG <- "C 1 2 1"
 
 # Create an arbitrary cell compatible with C 2
