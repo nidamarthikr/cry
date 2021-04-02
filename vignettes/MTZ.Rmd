@@ -1,0 +1,93 @@
+---
+title: "Read and analyse an MTZ file"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Read and analyse an MTZ file}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+<!-- Block with global markdown options
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+-->
+
+## Introduction
+Main aim of this tutorial is to load the full content of an MTZ file in the workspace, to analyse and modify data, and to write the modified content into a new MTZ file.
+
+## Sample MTZ file
+Some sample files are stored as external data in this package. These are the MTZ files available with the current release. To access the file, first load the `cry` package.
+
+```{r, ech=TRUE}
+library(cry)
+```
+
+Next, have a look at what is included in the external-data directory of `cry`.
+
+```{r echo=TRUE}
+datadir <- system.file("extdata",package="cry")
+all_files <- list.files(datadir)
+print(all_files)
+```
+
+We are interested in the MTZ file "insulin_merged.mtz". This file can be loaded using function `readMTZ`.
+
+## The structure of an MTZ file in R
+Let's load "insulin_merged.mtz" in memory. The created object is a named list.
+
+```{r echo=TRUE}
+filename <- file.path(datadir,"insulin_merged.mtz")
+objMTZ <- readMTZ(filename)
+class(objMTZ)
+names(objMTZ)
+```
+Each component of \code{objMTZ} is either a named list, or a data frame. More specifically:
+
+1. `reflections`
+
+
+   It's a data frame. It contains the actual x-ray diffraction 
+   data from a given crystal.
+   
+2. `header`
+
+
+   It's a named list. It contains information on the crystal 
+   used to obtain the x-ray diffraction data and on the 
+   diffraction experiment, in general.
+   
+3. `batch_header`
+   It's a named list. It gets filled only when the MTZ file       
+   includes so-called "unmerged" data. 
+   
+   
+For the merged MTZ file we are exploring in this tutorial, the `batch_header` is `NULL`.
+
+## The MTZ `header`
+This is a named list. The names hint at the content of the specific component.
+
+```{r echo=TRUE}
+hdr <- objMTZ$header
+class(hdr)
+names(hdr)
+```
+
+For example, `NCOL` is the number of columns of the `reflections` data frame, `CELL` contains the crystal unit cell parameters and `SYMM` includes information on the crystal symmetry.
+
+A merged MTZ file stores reflections x-ray data in a hierarchical way. The main purpose of collecting x-ray data is to determine the 3D structure of the molecule arranged in an ordered crystallographic lattice. Reflections related to a same molecule can come from different crystals. Different datasets, corresponding to different rotation sweeps from the same crystal, can be related to a crystal. Each MTZ file can thus include data from several crystals, each crystal giving origin to several datasets. Normally, a single MTZ file will be part of a same project, but this does not necessarily have to be the case. In summary, the hierarchy defining each dataset is:
+<center>
+ *Project* $\quad\Rightarrow\quad$ *Crystal* $\quad\Rightarrow\quad$ *Dataset*
+</center>
+For the file loaded we find:
+
+```{r echo=TRUE}
+print(objMTZ$header$PROJECT)
+print(objMTZ$header$CRYSTAL)
+print(objMTZ$header$DATASET)
+```
+
+The only dataset in this MTZ file is called
+

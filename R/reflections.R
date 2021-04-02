@@ -9,8 +9,9 @@
 #' Reads and output an MTZ header
 #'
 #' @param filename A character string. The path to a valid mtz file.
-#' @param message A logical variable. If TRUE (default) the function prints
+#' @param message A logical variable. If TRUE the function prints
 #'    a message highlighting what is included in the mtz header.
+#'    Default value is \code{message=FALSE}.
 #' @return A named list. Each name correspond to a valid field in the mtz
 #'    header.
 #' @examples
@@ -21,7 +22,7 @@
 #' print(ltmp$CELL)
 #' print(ltmp$SYMM)
 #' @export
-readMTZHeader <- function(filename,message=TRUE)
+readMTZHeader <- function(filename,message=FALSE)
 {
   # Reads and output MTZ header (version running independently
   # of readMTZ)
@@ -62,9 +63,10 @@ readMTZHeader <- function(filename,message=TRUE)
 #'
 #' @param filename A character string. The path to a valid mtz
 #'                 file.
-#' @param message A logical variable. If TRUE (default) the
+#' @param message A logical variable. If TRUE the
 #'                function prints a message highlighting data
-#'                included in the mtz file.
+#'                included in the mtz file. Default value is
+#'                \code{message=FALSE}.
 #' @return A named list of length 3. The first element is
 #'         called "reflections" and is a dataframe with as
 #'         many columns as are included in the mtz file.
@@ -95,8 +97,7 @@ readMTZHeader <- function(filename,message=TRUE)
 #' print(range(refs$H))
 #'
 #' @export
-readMTZ <- function(filename, message = TRUE){
-
+readMTZ <- function(filename,message=FALSE) {
   ################################################################################
   ## a function for reading an MTZ file                                         ##
   ## N.B. assumes 4 bytes per data item, not sure if this is always true        ##
@@ -157,13 +158,406 @@ readMTZ <- function(filename, message = TRUE){
   close(f)
 
   # Output data are packed in a list
-  data <- list(reflections=reflnData,header=hData[[1]],batch_header=bhData)
+  data <- list(reflections=reflnData,header=hData[[1]],
+               batch_header=bhData)
 
   # Create "mtz" class
   #class(data) <- "mtz"
 
   return(data)
 }
+
+
+#' Write data to an MTZ file
+#'
+#' Write reflections and experimental information
+#' to an MTZ file
+#'
+#' @param reflections A data frame containing all reflection
+#'                    records in columns. This is usually derived
+#'                    from modifications of a previously existing
+#'                    data frame obtained using
+#'                    \code{\link{readMTZ}}.
+#' @param header A list whose components are other R objects. This
+#'               is normally derived from the reading of another
+#'               MTZ file using \code{\link{readMTZ}}. The fields
+#'               available are:
+#'               \describe{
+#'                \item{NCOL}{Number of columns in data frame
+#'                            \code{reflections}.}
+#'                \item{CELL}{A numeric vector of length 6,
+#'                            containing the unit cell parameters.}
+#'                \item{SORT}{An integer vector of length 5,
+#'                            containing the sort order of the
+#'                            first 5 columns of data.}
+#'                \item{SYMINF}{Un-named list with 6 components:
+#'                              the number of symmetry operations
+#'                              (an integer), the number of
+#'                              primitive operations (an integer),
+#'                              the lattice type (a one-letter
+#'                              character), the space group number
+#'                              (an integer), the space group name
+#'                              (a 10-letter character string) and
+#'                              the point group name (a 6-letter
+#'                              character).}
+#'                \item{RESO}{Minimum and maximum data resolution,
+#'                            stored as \eqn{{1/d^2}}.}
+#'                \item{NDIF}{Number of datasets whose reflection
+#'                            data are present in the file.}
+#'                \item{SYMM}{A character vector whose length
+#'                            depends on the type of symmetry. It
+#'                            describes the symmetry operations in
+#'                            human-readable format, International
+#'                            Tables style. Each string is
+#'                            80 characters long.}
+#'                \item{PROJECT}{A data frame whose rows provide an
+#'                               ID and a name (called "pname") for
+#'                               the projects for which the data
+#'                               contained have been produced.}
+#'                \item{CRYSTAL}{A data frame whose rows provide an
+#'                               ID and a name (called "pname") for
+#'                               the crystals for which the data
+#'                               contained have been produced.}
+#'                \item{DATASET}{A data frame whose rows provide an
+#'                               ID and a name (called "pname") for
+#'                               the datasets included in the
+#'                               reflections record.}
+#'                \item{DCELL}{A data frame whose rows contain the
+#'                             \code{CRYSTAL} IDs and
+#'                             cell parameters of each crystal
+#'                             that has contributed to the data in
+#'                             the reflections record.}
+#'                \item{DWAVEL}{A data frame whose rows contain
+#'                             the \code{DATASET} IDs and the
+#'                             wavelength with which the reflection
+#'                             data were collected.}
+#'                \item{COLUMN}{A data frame describing the type of
+#'                              data included in the reflections
+#'                              record. The data frame includes the
+#'                              labels for each column, the dtype
+#'                              (see \code{\link{merged_reflections}})
+#'                              for each column, min and max values and
+#'                              the \code{DATASET} ID.}
+#'                \item{COLSRC}{A data frame with three columns. The
+#'                              first includes the labels of each
+#'                              reflections record column. The second
+#'                              includes a time stamp of when each data
+#'                              column was created. The third is the
+#'                              dataset ID as a string.}
+#'                \item{COLGRP}{A character string vector where each
+#'                              component is an 80-letters string
+#'                              describing the name and type of data.}
+#'                \item{HISTORY}{A character string vector of variable
+#'                               length. Each component is an 80-letter
+#'                               string summarising the steps that lead
+#'                               to the curren reflections record.}
+#'               }
+#' @param batch_header A named list including information at data
+#'                     collection time. This component is present
+#'                     only for raw (unmerged) intensity data
+#'                     produce after the diffraction images
+#'                     integration. Merged MTZ reflection files
+#'                     have \code{batch_header=NULL}.
+#'                     Names and types depend on
+#'                     the type of experiment (more information
+#'                     on this can be found at
+#'                     \href{http://www.ccp4.ac.uk}{CCP4}.)
+#' @param filename A character string. The path to a valid mtz
+#'                 file. If a file with the same name exists, it
+#'                 will be deleted.
+#' @param title A character string. The character string
+#'              associated with the TITLE keyword in an MTZ file.
+#'              This feature makes it easy to quickly identify the
+#'              data file in
+#'              \href{http://www.ccp4.ac.uk}{CCP4} programs, but it
+#'              is not directly used in \code{cry}.
+#' @return A logical variable. If TRUE, the function has written
+#'         a successful MTZ file.
+#'
+#' @examples
+#' # Read the insulin data included in the package
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"insulin_merged.mtz")
+#' lmtz <- readMTZ(filename)
+#'
+#' # Change dataset name
+#' print(lmtz$header$DATASET)
+#' lmtz$header$DATASET[2,2] <- "New CRY dataset"
+#'
+#' # Add one HISTORY line (string has to be 80-letters long)
+#' addhist <- "From CRY 0.3.0 - run on Apr 2 20:12:00 2021"
+#' n <- nchar(addhist)
+#' nblanks <- 80-n
+#' for (i in 1:nblanks) addhist <- paste0(addhist," ")
+#' lmtz$header$HISTORY <- c(lmtz$header$HISTORY,addhist)
+#'
+#' # Write to a new MTZ file
+#' wd <- tempdir()
+#' fname <- file.path(wd,"new.mtz")
+#' writeMTZ(lmtz$reflections,lmtz$header,fname)
+#'
+#' @export
+writeMTZ <- function(reflections,header,filename,
+                     title="Generated from CRY",
+                     batch_header=NULL){
+  # Create a connection to binary file
+  f <- file(filename, open="wb")
+
+  # Hex version of ascii "MTZ "
+  rawNULL <- as.raw(0)
+  rawBlank <- charToRaw(" ")
+  rawMTZ <- c(as.raw(77),as.raw(84),as.raw(90),rawBlank)
+
+  # Write MTZ file signature
+  writeBin(rawMTZ,f)
+
+  # Determine data length
+  dl <- length(reflections[,1])
+  cl <- length(reflections)
+  data_length <- dl*cl
+
+  # Location of header
+  #headerLoc <- 80+data_length*4+1
+  headerLoc <- data_length+20+1
+  storage.mode(headerLoc) <- "integer"  # Turn headerLoc into
+  # integer for correct
+  # binary storage
+  writeBin(headerLoc,f,size=4)
+
+  # Machine stamp (to be improved)
+  machineStamp <- "DA"
+  writeChar(machineStamp,f,nchars=2)
+
+  # Fill with NULLs for 69 bytes (2 to complete machine stamp,
+  # plus 68 to get to a total of 80. We write one less as this
+  # is automatically added when connection is closed)
+  for (i in 1:69) writeBin(rawNULL,f)
+
+  # Data (data frame -> matrix -> transpose(matrix) ->
+  # vector -> write to binary file)
+  #numDataItems <- (headerLoc-80-1)/4
+  numDataItems <- data_length
+  linedata <- as.vector(t(as.matrix(reflections)))
+  writeBin(linedata,f,size=4)
+  rm(linedata)
+
+  # Build header 80-characters lines and write to binary file
+  fullhdata <- ""
+  hdata <- "VERS MTZ:V1.1                                                                   "
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # MTZ stamp
+  hdata <- paste("TITLE",title)
+  nblanks <- 80-nchar(hdata)
+  for (i in 1:nblanks) hdata <- paste(hdata," ",sep="")
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # TITLE
+  hdata <- sprintf("NCOL%9d%13d%9d                                             ",
+                   header$NCOL[1],header$NCOL[2],header$NCOL[3])
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # NCOL
+  hdata <- sprintf("CELL %10.4f%10.4f%10.4f%10.4f%10.4f%10.4f               ",
+                   header$CELL[1],header$CELL[2],header$CELL[3],header$CELL[4],
+                   header$CELL[5],header$CELL[6])
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # CELL
+  hdata <- sprintf("SORT %4d%4d%4d%4d%4d                                                       ",
+                   header$SORT[1],header$SORT[2],header$SORT[3],
+                   header$SORT[4],header$SORT[5])
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # SORT
+  hdata <- sprintf("SYMINF %3d%3d %1s%6d",
+                   header$SYMINF[[1]],header$SYMINF[[2]],header$SYMINF[[3]],
+                   header$SYMINF[[4]])
+  nblanks <- 23-nchar(header$SYMINF[[5]])
+  stmp <- ""
+  for (i in 1:nblanks) stmp <- paste(stmp," ",sep="")
+  stmp <- paste(stmp,header$SYMINF[[5]],sep="")
+  hdata <- paste(hdata,stmp,sprintf("%6s                              ",
+                                    header$SYMINF[[6]]),sep="")
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # SYMINF
+  for (i in 1:length(header$SYMM)) {
+    hdata <- header$SYMM[i]
+    fullhdata <- paste(fullhdata,hdata,sep="")                                                  # SYMM
+  }
+  hdata <- sprintf("RESO %8.6f   %8.6f                                                        ",
+                   header$RESO[1],header$RESO[2])
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # RESO
+  hdata <- "VALM NAN                                                                        "
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # VALM
+  for (i in 1:length(header$COLUMN[,1])) {
+    linea <- c()
+    linea <- c(linea,header$COLUMN$labels[i],
+               header$COLUMN$types[i],
+               header$COLUMN$min[i],
+               header$COLUMN$max[i],
+               header$COLUMN$id[i])
+    hdata <- sprintf("COLUMN %-31s%1s%18s%18s  %3s",
+                     linea[1],linea[2],linea[3],linea[4],linea[5])
+    fullhdata <- paste(fullhdata,hdata,sep="")                                                 # COLUMN
+  }
+  hdata <- sprintf("NDIF %8d                                                                   ",
+                   header$NDIF)
+  fullhdata <- paste(fullhdata,hdata,sep="")                                                    # NDIF
+  for (i in 1:header$NDIF) {
+    hdata <- sprintf("PROJECT%8d %-64s",
+     header$PROJECT$id[i],header$PROJECT$pname[i])
+    fullhdata <- paste(fullhdata,hdata,sep="")
+    hdata <- sprintf("CRYSTAL%8d %-64s",
+     header$CRYSTAL$id[i],header$CRYSTAL$cname[i])
+    fullhdata <- paste(fullhdata,hdata,sep="")
+    hdata <- sprintf("DATASET%8d %-64s",
+                     header$DATASET$id[i],header$DATASET$dname[i])
+    fullhdata <- paste(fullhdata,hdata,sep="")
+    hdata <- sprintf("DCELL%10d %10.4f%10.4f%10.4f%10.4f%10.4f%10.4f    ",
+                     header$DCELL$id[i],header$DCELL$a[i],
+                     header$DCELL$b[i],header$DCELL$c[i],
+                     header$DCELL$alpha[i],header$DCELL$beta[i],
+                     header$DCELL$gamma[i])
+    fullhdata <- paste(fullhdata,hdata,sep="")
+    hdata <- sprintf("DWAVEL%9d %10.5f                                                      ",
+                     header$DWAVEL$id[i],header$DWAVEL$lambda[i])
+    fullhdata <- paste(fullhdata,hdata,sep="")
+  }
+  plength <- length(header$BATCH)
+  dnd <- 0
+  while (plength > 0) {
+    dnd <- dnd+1
+    rem <- plength%%12
+    istart <- (dnd-1)*12+1
+    iend <- istart+11
+    hdata <- sprintf("BATCH ")
+    if (plength >= 12) {
+      for (i in istart:iend) hdata <- paste(hdata,
+                                            sprintf("%6d",header$BATCH[i]),sep="")
+      hdata <- paste(hdata,sprintf("  "),sep="")
+      fullhdata <- paste(fullhdata,hdata,sep="")
+    }
+    if (plength < 12) {
+      for (i in istart:length(header$BATCH)) hdata <- paste(hdata,
+                                                            sprintf("%6d",header$BATCH[i]),sep="")
+      iend <- 12-rem
+      for (i in 1:iend) hdata <- paste(hdata,
+                                       sprintf("      "),sep="")
+      hdata <- paste(hdata,sprintf("  "),sep="")
+      fullhdata <- paste(fullhdata,hdata,sep="")
+    }
+    plength <- plength-12
+  }
+  hdata <- sprintf("END                                                                             ")
+  fullhdata <- paste(fullhdata,hdata,sep="")
+  #hdata <- sprintf("MTZHIST%4d                                                                     ",(length(data[[2]]$HISTORY)-1))
+  #fullhdata <- paste(fullhdata,hdata,sep="")
+  for (i in 1:length(header$HISTORY)) {
+    hdata <- header$HISTORY[i]
+    fullhdata <- paste(fullhdata,hdata,sep="")                                                # HISTORY
+  }
+
+  # End of MTZ or beginning of batch headers
+  if (header$NCOL[3] == 0) {
+    hdata <- sprintf("MTZENDOFHEADERS                                                                 ")
+    fullhdata <- paste(fullhdata,hdata,sep="")
+    writeChar(fullhdata,f,eos=NULL)
+
+    # Close connection
+    close(f)
+  }
+
+  # Conversion (just copying) to re-use old code
+  data <- list(NULL,NULL,batch_header)
+
+  # Carry on filling batch_header (if unmerged file)
+  if (header$NCOL[3] != 0) {
+    hdata <- sprintf("MTZBATS                                                                         ")
+    fullhdata <- paste(fullhdata,hdata,sep="")
+    writeChar(fullhdata,f,eos=NULL)
+
+    # All BATCH HEADER stuff is written from here onward
+    nbatches <- length(data[[2]]$BATCH)
+    for (num in data[[2]]$BATCH[1]:data[[2]]$BATCH[nbatches])
+    {
+      hdata <- sprintf("BH %8d%8d%8d%8d                                             ",num,data[[3]][[num]]$NWORDS,data[[3]][[num]]$NINTGR,data[[3]][[num]]$NREALS)
+      writeChar(hdata,f,eos=NULL)
+      hdata <- paste("TITLE",data[[3]][[num]]$TITLE)                                                             # TITLE
+      nblanks <- 80-nchar(hdata)
+      for (i in 1:nblanks) hdata <- paste(hdata," ",sep="")
+      writeChar(hdata,f,eos=NULL)
+      ## INTEGERS
+      writeBin(data[[3]][[num]]$NWORDS,f,size=4)                                                                 # NWORDS
+      writeBin(data[[3]][[num]]$NINTGR,f,size=4)                                                                 # NINTGR
+      writeBin(data[[3]][[num]]$NREALS,f,size=4)                                                                 # NREALS
+      writeBin(data[[3]][[num]]$IORTYP,f,size=4)                                                                 # IORTYP
+      writeBin(data[[3]][[num]]$LBCELL,f,size=4)                                                                 # LBCELL (6)
+      writeBin(data[[3]][[num]]$MISFLG,f,size=4)                                                                 # MISFLG
+      writeBin(data[[3]][[num]]$JUMPAX,f,size=4)                                                                 # JUMPAX
+      writeBin(data[[3]][[num]]$NCRYST,f,size=4)                                                                 # NCRYST
+      writeBin(data[[3]][[num]]$LCRFLG,f,size=4)                                                                 # LCRFLG
+      writeBin(data[[3]][[num]]$LDTYPE,f,size=4)                                                                 # LDTYPE
+      writeBin(data[[3]][[num]]$JSCAX,f,size=4)                                                                  # JSCAX
+      writeBin(data[[3]][[num]]$NBSCAL,f,size=4)                                                                 # NBSCAL
+      writeBin(data[[3]][[num]]$NGONAX,f,size=4)                                                                 # NGONAX
+      writeBin(data[[3]][[num]]$LBMFLG,f,size=4)                                                                 # LBMFLG
+      writeBin(data[[3]][[num]]$NDET,f,size=4)                                                                   # NDET
+      writeBin(data[[3]][[num]]$LBSETID,f,size=4)                                                                # LBSETID
+      writeBin(data[[3]][[num]]$INTPAD,f,size=4)                                                                 # INTPAD (8)
+      ## REALS
+      writeBin(data[[3]][[num]]$CELL,f,size=4)                                                                   # CELL (6)
+      writeBin(as.vector(data[[3]][[num]]$UMAT),f,size=4)                                                        # UMAT (9)
+      writeBin(as.vector(data[[3]][[num]]$PHIXYZ),f,size=4)                                                      # PHIXYZ (6)
+      writeBin(data[[3]][[num]]$CRYDAT$ETAD,f,size=4)                                                            # CRYDAT$ETAD
+      writeBin(data[[3]][[num]]$CRYDAT$ETADH,f,size=4)                                                           # CRYDAT$ETADH
+      writeBin(data[[3]][[num]]$CRYDAT$ETADV,f,size=4)                                                           # CRYDAT$ETADH
+      writeBin(as.vector(data[[3]][[num]]$CRYDAT$GENERIC),f,size=4)                                              # CRYDAT$GENERIC (9)
+      writeBin(data[[3]][[num]]$DATUM,f,size=4)                                                                  # DATUM (3)
+      writeBin(data[[3]][[num]]$PHISTT,f,size=4)                                                                 # PHISTT
+      writeBin(data[[3]][[num]]$PHIEND,f,size=4)                                                                 # PHIEND
+      writeBin(data[[3]][[num]]$SCANAX,f,size=4)                                                                 # SCANAX (3)
+      writeBin(data[[3]][[num]]$TIME1,f,size=4)                                                                  # TIME1
+      writeBin(data[[3]][[num]]$TIME2,f,size=4)                                                                  # TIME2
+      writeBin(data[[3]][[num]]$BSCALE,f,size=4)                                                                 # BSCALE
+      writeBin(data[[3]][[num]]$BBFAC,f,size=4)                                                                  # BBFAC
+      writeBin(data[[3]][[num]]$SDBSCL,f,size=4)                                                                 # SDBSCL
+      writeBin(data[[3]][[num]]$SDBFAC,f,size=4)                                                                 # SDBFAC
+      writeBin(data[[3]][[num]]$PHIRANGE,f,size=4)                                                               # PHIRANGE
+      writeBin(data[[3]][[num]]$BATPAD,f,size=4)                                                                 # BATPAD (11)
+      writeBin(data[[3]][[num]]$E1,f,size=4)                                                                     # E1 (3)
+      writeBin(data[[3]][[num]]$E2,f,size=4)                                                                     # E2 (3)
+      writeBin(data[[3]][[num]]$E3,f,size=4)                                                                     # E3 (3)
+      writeBin(data[[3]][[num]]$GONPAD,f,size=4)                                                                 # GONPAD (12)
+      writeBin(data[[3]][[num]]$SOURCE,f,size=4)                                                                 # SOURCE (3)
+      writeBin(data[[3]][[num]]$S0,f,size=4)                                                                     # S0 (3)
+      writeBin(data[[3]][[num]]$BEMDAT$ALAMBD,f,size=4)                                                          # BEMDAT$ALAMBD
+      writeBin(data[[3]][[num]]$BEMDAT$DELAMB,f,size=4)                                                          # BEMDAT$DELAMB
+      writeBin(data[[3]][[num]]$BEMDAT$DELCOR,f,size=4)                                                          # BEMDAT$DELCOR
+      writeBin(data[[3]][[num]]$BEMDAT$DIVHD,f,size=4)                                                           # BEMDAT$DIVHD
+      writeBin(data[[3]][[num]]$BEMDAT$DIVVD,f,size=4)                                                           # BEMDAT$DIVVD
+      writeBin(data[[3]][[num]]$BEMDAT$rest,f,size=4)                                                            # rest of BEMDAT (20)
+      writeBin(data[[3]][[num]]$DX1,f,size=4)                                                                    # DX1
+      writeBin(data[[3]][[num]]$THETA1,f,size=4)                                                                 # THETA1
+      writeBin(as.vector(data[[3]][[num]]$DETLM1),f,size=4)                                                      # DETLM1 (4)
+      writeBin(data[[3]][[num]]$DX2,f,size=4)                                                                    # DX2
+      writeBin(data[[3]][[num]]$THETA2,f,size=4)                                                                 # THETA2
+      writeBin(as.vector(data[[3]][[num]]$DETLM2),f,size=4)                                                      # DETLM2 (4)
+      writeBin(data[[3]][[num]]$DETPAD,f,size=4)                                                                 # DETPAD (33)
+
+      # Last line "BHCH"
+      if (is.null(data[[3]][[num]]$GONLAB)) batchData <- "BHCH                                                                            "
+      if (!is.null(data[[3]][[num]]$GONLAB))
+      {
+        lengthGONLAB <- length(data[[3]][[num]]$GONLAB)
+        batchData <- "BHCH "
+        for (i in 1:lengthGONLAB) batchData <- paste(batchData,sprintf("%-9s%-9s%-9s",
+                                                                       data[[3]][[num]]$GONLAB[1],data[[3]][[num]]$GONLAB[2],data[[3]][[num]]$GONLAB[3]),sep="")
+        nblanks <- 80-nchar(hdata)
+        for (i in 1:nblanks) batchData <- paste(batchData," ",sep="")
+      }
+      writeChar(batchData,f,eos=NULL)
+    }
+    # End of MTZ file
+    batchData <- "MTZENDOFHEADERS                                                                 "
+    writeChar(batchData,f,eos=NULL)
+
+    # Close connection
+    close(f)
+  }
+}
+
+
+
 
 
 #' Mean and standard deviation in resolution shells.

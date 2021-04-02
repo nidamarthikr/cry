@@ -4,15 +4,16 @@
 \alias{readMTZ}
 \title{Load an MTZ file}
 \usage{
-readMTZ(filename, message = TRUE)
+readMTZ(filename, message = FALSE)
 }
 \arguments{
 \item{filename}{A character string. The path to a valid mtz
 file.}
 
-\item{message}{A logical variable. If TRUE (default) the
+\item{message}{A logical variable. If TRUE the
 function prints a message highlighting data
-included in the mtz file.}
+included in the mtz file. Default value is
+\code{message=FALSE}.}
 }
 \value{
 A named list of length 3. The first element is
