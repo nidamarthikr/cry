@@ -33,13 +33,13 @@ all_files <- list.files(datadir)
 print(all_files)
 ```
 
-We are interested in the MTZ file "insulin_merged.mtz". This file can be loaded using function `readMTZ`.
+We are interested in the MTZ file "1dei_phases.mtz". This file can be loaded using function `readMTZ`.
 
 ## The structure of an MTZ file in R
-Let's load "insulin_merged.mtz" in memory. The created object is a named list.
+Let's load "1dei_phases.mtz" in memory. The created object is a named list.
 
 ```{r echo=TRUE}
-filename <- file.path(datadir,"insulin_merged.mtz")
+filename <- file.path(datadir,"1dei_phases.mtz")
 objMTZ <- readMTZ(filename)
 class(objMTZ)
 names(objMTZ)
@@ -67,7 +67,7 @@ Each component of \code{objMTZ} is either a named list, or a data frame. More sp
 For the merged MTZ file we are exploring in this tutorial, the `batch_header` is `NULL`.
 
 ## The MTZ `header`
-This is a named list. The names hint at the content of the specific component.
+This is a named list. The names hint at the content of the specific components.
 
 ```{r echo=TRUE}
 hdr <- objMTZ$header
@@ -89,5 +89,145 @@ print(objMTZ$header$CRYSTAL)
 print(objMTZ$header$DATASET)
 ```
 
-The only dataset in this MTZ file is called
+The only dataset in this MTZ file is called *data_1*. It was obtained from x-ray diffraction of a crystal called *cryst_1*. This crystal is one of the samples belonging to a project called *sf_convert*. All MTZ files contain, by default, a dataset *HKL_base* which comes from the crystal *HKL_base*, which is part of the project *HKL_base*; this peculiar project is always present to make sure that data observations made only of the Miller indices, are always included. More information on the header's content can be read in the documentation for `readMTZ` or `readMTZHeader`.
 
+## The MTZ `reflections`
+Data are actually contained in this component. It is a data frame whose columns have the names found in the header component `COLUMN[,1]`:
+
+```{r echo=TRUE}
+objMTZ$header$COLUMN[,1]
+objMTZ$reflections[1:5,]
+```
+
+A data frame is the appropriate class for observations like the crystallographic x-ray data. One reason for this is, for instance, that grouping or selection according to a specific criterion can be carried out very easily with a data frame. Let us, as an example, select part of the data using a condition on the Miller indices. We can be interested to select reflections for which $h$ has a specific value; this is shown in the following chunk of code.
+
+```{r echo=TRUE}
+# List the different values of H
+unique(objMTZ$reflections$H)
+
+# Select all reflections with H=1
+idx <- which(objMTZ$reflections$H == 1)
+length(idx)  # 373 reflections have H=0
+
+# Save these reflections in a different object
+refs <- objMTZ$reflections[idx,]
+
+# Show the first 10 selected reflections
+refs[1:10,]
+
+# Find out the range of FP/sigFP for the selected reflections
+range(refs$FP/refs$SIGFP)
+```
+
+Clearly, a lot of different operations and investigations can be carried out on the selected data. A second example involves data for which the signal-to-noise ratio (FP/sigFP) is greater than 1, as shown in the following snippet.
+
+```{r echo=TRUE,fig.height=3,fig.width=5}
+idx <- which(objMTZ$reflections$FP/objMTZ$reflections$SIGFP >= 1)
+length(idx) # 8377 reflections have FP/sigFP >= 1
+
+# The reflections can be extracted
+refs <- objMTZ$reflections[idx,]
+
+# Histogram of I/sigI
+hist(refs$FP/refs$SIGFP,breaks=30,
+     main="FP/sigFP",xlab="FP/sigFP")
+```
+
+A third example is related to the reflections' resolution. Once it has been calculated (cell parameters are needed to do that), data can be selected within a given resolution range (a so-called *resolution shell*). There is a function in `cry`, called `hkl_to_reso`, which calculates the resolution in angstroms for a reflection of Miller indices $h, k, l$.
+
+```{r echo=TRUE}
+# Extract cell parameters from header
+cpars <- objMTZ$header$CELL
+print(cpars)
+a <- cpars[1]; b <- cpars[2]; c <- cpars[3]
+aa <- cpars[4]; bb <- cpars[5]; cc <- cpars[6]
+
+# Resolution of reflection (1,0,0) (0,1,0) (0,0,1)
+hkl_to_reso(1,0,0,a,b,c,aa,bb,cc)
+hkl_to_reso(0,1,0,a,b,c,aa,bb,cc)
+hkl_to_reso(0,0,1,a,b,c,aa,bb,cc)
+
+# Reflections with higher Miller indices have higher resolutions
+hkl_to_reso(10,0,0,a,b,c,aa,bb,cc)
+hkl_to_reso(10,0,-20,a,b,c,aa,bb,cc)
+```
+
+Once resolutions are calculated (and the calculation is done on data having the same order as the original reflections), data within a given resolution shell can be selected.
+
+```{r echo=TRUE}
+resos <- hkl_to_reso(objMTZ$reflections$H,
+                     objMTZ$reflections$K,
+                     objMTZ$reflections$L,
+                     a,b,c,aa,bb,cc)
+
+# Resolution range for all data
+range(resos)
+
+# Select data with resolution between 5 and 9 angstroms
+idx <- which(resos >= 5 & resos <= 9)
+length(idx)  # Only 314 reflections
+```
+
+## Output to a new MTZ file
+In order to investigate specific ideas it might be worth to modify the observations in a specific way and to write them out to a new MTZ file to be later handled by the tools proper of the [CCP4](http://www.ccp4.ac.uk) family of programs for crystallography. The `cry` function to write reflections content to an MTZ file is called `writeMTZ`. In order to make this a flexible function, it has been deemed appropriate to take as input the three named lists returned by `readMTZ`. These will have been changed by the user, prior to use with `writeMTZ`. By default, the MTZ file title is left unchanged and the `batch_header` list is set to `NULL`; thus by default the MTZ file is assumed to be a merged-reflections file. Special attention will have to be devoted to parts of the `header` list, which store information on the observations. These are, for instance, `NCOL`, `SORT`, `RESO`, `COLUMN`, etc. An example can help to clarify this concept.
+
+A typical modifications of the observed data is when high-resolution reflections are eliminated. This means that the number of reflections and other quantities in the `header` will have to be changed.
+
+```{r echo=TRUE}
+# Copy original data to 2 separate lists
+refs <- objMTZ$reflections
+hdr <- objMTZ$header
+length(refs[,1])  # Number of reflections before cut
+print(hdr$NCOL[2])
+
+# Cut data to 5 angstroms resolution
+# (see previous chunk of code for resos)
+idx <- which(resos >= 5)
+refs <- refs[idx,]
+length(refs[,1])  # Now there are only 333 observations
+
+# Modify specific parts of header
+hdr$NCOL[2] <- length(refs[,1])            # Number of reflections
+hdr$RESO <- sort(1/range(resos[idx])^2)    # Resolution range
+hdr$DATASET[2,2] <- "Data cut to 5A"  # Dataset
+obsmin <- apply(refs,2,min,na.rm=TRUE)
+obsmax <- apply(refs,2,max,na.rm=TRUE)
+hdr$COLUMN[,3] <- obsmin                   # COLUMN
+hdr$COLUMN[,4] <- obsmax
+```
+
+The data frame `COLSRC` contains the date and time at which the specific data columns have been generated. This can be changed
+with the `cry` function `change_COLSRC`; the new date and time is
+the current one.
+
+```{r echo=TRUE}
+# Original COLSRC
+print(hdr$COLSRC)
+
+# Change date and time
+hdr <- change_COLSRC(hdr)
+
+# New COLSRC
+print(hdr$COLSRC)
+```
+
+Once all changes have been done, the list components are ready to
+be saved out to a new MTZ file called, in this specific instance,
+"new.mtz".
+
+```{r echo=TRUE}
+# Temporary directory for output
+tdir <- tempdir()
+fname <- file.path(tdir,"new.mtz")
+
+# Write changed data to the new MTZ file
+writeMTZ(refs,hdr,fname,title="New truncated dataset")
+```
+
+Data from the new MTZ file can either be explored using CCP4
+programs, or read back into R using again `readMTZ`.
+
+```{r echo=TRUE}
+# Read data from "new.mtz"
+newMTZ <- readMTZ(fname,TRUE)
+```

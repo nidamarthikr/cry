@@ -23,7 +23,9 @@ A named list of length 3. The first element is
         with the name of the corresponding column in the mtz.
         The second element is called "header" and is a named
         list in which each name correspond to a valid field
-        in the mtz header. The third element is called
+        in the mtz header (see details in
+        \code{\link{readMTZHeader}}).
+        The third element is called
         "batch_header" and is a list with as many elements as
         the number of batches (images) included in the mtz
         file. Each list element is, itself, a named list
@@ -40,7 +42,7 @@ headers.
 \examples{
 
 datadir <- system.file("extdata",package="cry")
-filename <- file.path(datadir,"insulin_merged.mtz")
+filename <- file.path(datadir,"1dei_phases.mtz")
 ltmp <- readMTZ(filename)
 print(names(ltmp))
 print(class(ltmp$reflections))

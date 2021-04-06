@@ -4,13 +4,7 @@
 \alias{writeMTZ}
 \title{Write data to an MTZ file}
 \usage{
-writeMTZ(
-  reflections,
-  header,
-  filename,
-  title = "Generated from CRY",
-  batch_header = NULL
-)
+writeMTZ(reflections, header, filename, title = NULL, batch_header = NULL)
 }
 \arguments{
 \item{reflections}{A data frame containing all reflection
@@ -21,78 +15,8 @@ data frame obtained using
 
 \item{header}{A list whose components are other R objects. This
 is normally derived from the reading of another
-MTZ file using \code{\link{readMTZ}}. The fields
-available are:
-\describe{
- \item{NCOL}{Number of columns in data frame
-             \code{reflections}.}
- \item{CELL}{A numeric vector of length 6,
-             containing the unit cell parameters.}
- \item{SORT}{An integer vector of length 5,
-             containing the sort order of the
-             first 5 columns of data.}
- \item{SYMINF}{Un-named list with 6 components:
-               the number of symmetry operations
-               (an integer), the number of
-               primitive operations (an integer),
-               the lattice type (a one-letter
-               character), the space group number
-               (an integer), the space group name
-               (a 10-letter character string) and
-               the point group name (a 6-letter
-               character).}
- \item{RESO}{Minimum and maximum data resolution,
-             stored as \eqn{{1/d^2}}.}
- \item{NDIF}{Number of datasets whose reflection
-             data are present in the file.}
- \item{SYMM}{A character vector whose length
-             depends on the type of symmetry. It
-             describes the symmetry operations in
-             human-readable format, International
-             Tables style. Each string is
-             80 characters long.}
- \item{PROJECT}{A data frame whose rows provide an
-                ID and a name (called "pname") for
-                the projects for which the data
-                contained have been produced.}
- \item{CRYSTAL}{A data frame whose rows provide an
-                ID and a name (called "pname") for
-                the crystals for which the data
-                contained have been produced.}
- \item{DATASET}{A data frame whose rows provide an
-                ID and a name (called "pname") for
-                the datasets included in the
-                reflections record.}
- \item{DCELL}{A data frame whose rows contain the
-              \code{CRYSTAL} IDs and
-              cell parameters of each crystal
-              that has contributed to the data in
-              the reflections record.}
- \item{DWAVEL}{A data frame whose rows contain
-              the \code{DATASET} IDs and the
-              wavelength with which the reflection
-              data were collected.}
- \item{COLUMN}{A data frame describing the type of
-               data included in the reflections
-               record. The data frame includes the
-               labels for each column, the dtype
-               (see \code{\link{merged_reflections}})
-               for each column, min and max values and
-               the \code{DATASET} ID.}
- \item{COLSRC}{A data frame with three columns. The
-               first includes the labels of each
-               reflections record column. The second
-               includes a time stamp of when each data
-               column was created. The third is the
-               dataset ID as a string.}
- \item{COLGRP}{A character string vector where each
-               component is an 80-letters string
-               describing the name and type of data.}
- \item{HISTORY}{A character string vector of variable
-                length. Each component is an 80-letter
-                string summarising the steps that lead
-                to the curren reflections record.}
-}}
+MTZ file using \code{\link{readMTZ}}. See further
+details at \code{\link{readMTZHeader}}.}
 
 \item{filename}{A character string. The path to a valid mtz
 file. If a file with the same name exists, it
@@ -101,9 +25,9 @@ will be deleted.}
 \item{title}{A character string. The character string
 associated with the TITLE keyword in an MTZ file.
 This feature makes it easy to quickly identify the
-data file in
-\href{http://www.ccp4.ac.uk}{CCP4} programs, but it
-is not directly used in \code{cry}.}
+data file in \href{http://www.ccp4.ac.uk}{CCP4}
+programs. Default (NULL) is for the output file
+to have the same title as the input file.}
 
 \item{batch_header}{A named list including information at data
 collection time. This component is present
@@ -125,25 +49,25 @@ Write reflections and experimental information
 to an MTZ file
 }
 \examples{
-# Read the insulin data included in the package
+# Read the 1dei_phases data included in the package
 datadir <- system.file("extdata",package="cry")
-filename <- file.path(datadir,"insulin_merged.mtz")
-lmtz <- readMTZ(filename)
+filename <- file.path(datadir,"1dei_phases.mtz")
+lMTZ <- readMTZ(filename)
 
 # Change dataset name
-print(lmtz$header$DATASET)
-lmtz$header$DATASET[2,2] <- "New CRY dataset"
+print(lMTZ$header$DATASET)
+lMTZ$header$DATASET[2,2] <- "New CRY dataset"
 
 # Add one HISTORY line (string has to be 80-letters long)
 addhist <- "From CRY 0.3.0 - run on Apr 2 20:12:00 2021"
 n <- nchar(addhist)
 nblanks <- 80-n
 for (i in 1:nblanks) addhist <- paste0(addhist," ")
-lmtz$header$HISTORY <- c(lmtz$header$HISTORY,addhist)
+lMTZ$header$HISTORY <- c(lMTZ$header$HISTORY,addhist)
 
 # Write to a new MTZ file
 wd <- tempdir()
 fname <- file.path(wd,"new.mtz")
-writeMTZ(lmtz$reflections,lmtz$header,fname)
+writeMTZ(lMTZ$reflections,lMTZ$header,fname)
 
 }

@@ -36,7 +36,7 @@
 #'  }
 #' @examples
 #' datadir <- system.file("extdata",package="cry")
-#' fname <- file.path(datadir,"insulin_merged.mtz")
+#' fname <- file.path(datadir,"1dei_phases.mtz")
 #' hdr <- readMTZHeader(fname,message=FALSE)
 #' ucell <- hdr$CELL
 #' vtmp <- lattice_stuff(ucell[1],ucell[2],ucell[3],ucell[4],ucell[5],ucell[6])
@@ -101,7 +101,7 @@ lattice_stuff <- function(a,b,c,aa,bb,cc)
 #' @return A positive, real number. The resolution associated with (h,k,l), in angstroms.
 #' @examples
 #' datadir <- system.file("extdata",package="cry")
-#' fname <- file.path(datadir,"insulin_merged.mtz")
+#' fname <- file.path(datadir,"1dei_phases.mtz")
 #' hdr <- readMTZHeader(fname,message=FALSE)
 #' ucell <- hdr$CELL
 #' reso1 <- hkl_to_reso(1,0,0,ucell[1],ucell[2],ucell[3],ucell[4],ucell[5],ucell[6])

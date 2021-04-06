@@ -24,7 +24,7 @@
 #' # Load one of the XDS ASCII files included with
 #' # this distribution of cry
 #' datadir <- system.file("extdata",package="cry")
-#' filename <- file.path(datadir,"xds_ascii_01.hkl")
+#' filename <- file.path(datadir,"xds00_ascii.hkl")
 #' ltmp <- readXDS_ASCII_Header(filename)
 #' print(names(ltmp))
 #'
@@ -533,7 +533,7 @@ readXDS_ASCII_Header <- function(filename) {
 #' # Load one of the XDS ASCII files included with
 #' # this distribution of cry
 #' datadir <- system.file("extdata",package="cry")
-#' filename <- file.path(datadir,"xds_ascii_01.hkl")
+#' filename <- file.path(datadir,"xds00_ascii.hkl")
 #' ltmp <- readXDS_ASCII(filename,message=FALSE)
 #' print(names(ltmp))
 #' print(ltmp$reflections[1:5,])

@@ -8,19 +8,85 @@
 
 #' Reads and output an MTZ header
 #'
+#' An MTZ file is a binary file created to carry information on
+#' x-ray diffraction experiments on crystals. It includes x-ray
+#' diffraction data and information on the experiment and the
+#' crystal.
+#'
+#' The function returns a named list whose components are
+#' the \code{reflections}, the \code{header} and the
+#' \code{batch_header}. The \code{header} is a named list whose
+#' components are:
+#' \describe{
+#'   \item{TITLE}{A character string containing the title of the
+#'                MTZ file.}
+#'   \item{NCOL}{Number of columns in data frame
+#'    \code{reflections}.}
+#'   \item{CELL}{A numeric vector of length 6, containing the
+#'    unit cell parameters.}
+#'   \item{SORT}{An integer vector of length 5, containing the
+#'    sort order of the first 5 columns of data.}
+#'   \item{SYMINF}{Un-named list with 6 components: the number
+#'    of symmetry operations (an integer), the number of
+#'    primitive operations (an integer), the lattice type
+#'    (a one-letter character), the space group number (an
+#'    integer), the space group name (a 10-letter character
+#'    string) and the point group name (a 6-letter character).}
+#'   \item{RESO}{Minimum and maximum data resolution, stored as
+#'    \eqn{{1/d^2}}.}
+#'   \item{NDIF}{Number of datasets whose reflection data are
+#'    present in the file.}
+#'   \item{SYMM}{A character vector whose length depends on the
+#'    type of symmetry. It describes the symmetry operations in
+#'    human-readable format, International Tables style. Each
+#'    string is 80 characters long.}
+#'   \item{PROJECT}{A data frame whose rows provide an ID and a
+#'    name (called "pname") for the projects for which the data
+#'    contained have been produced.}
+#'   \item{CRYSTAL}{A data frame whose rows provide an ID and a
+#'    name (called "pname") for the crystals for which the data
+#'    contained have been produced.}
+#'   \item{DATASET}{A data frame whose rows provide an ID and a
+#'    name (called "pname") for the datasets included in the
+#'    reflections record.}
+#'   \item{DCELL}{A data frame whose rows contain the
+#'    \code{CRYSTAL} IDs and cell parameters of each crystal
+#'    that has contributed to the data in the reflections record.}
+#'   \item{DWAVEL}{A data frame whose rows contain the
+#'    \code{DATASET} IDs and the wavelength with which the
+#'     reflection data were collected.}
+#'   \item{COLUMN}{A data frame describing the type of data
+#'    included in the reflections record. The data frame includes
+#'    the labels for each column, the dtype (see
+#'    \code{\link{merged_reflections}}) for each column, min and
+#'    max values and the \code{DATASET} ID.}
+#'   \item{COLSRC}{A data frame with three columns. The first
+#'    includes the labels of each reflections record column. The
+#'    second includes a time stamp of when each data column was
+#'    created. The third is the dataset ID as a string.}
+#'   \item{COLGRP}{A character string vector where each component
+#'    is an 80-letters string describing the name and type of
+#'    data.}
+#'   \item{HISTORY}{A character string vector of variable length.
+#'    Each component is an 80-letter string summarising the steps
+#'    that lead to the curren reflections record. HISTORY can
+#'    contain a maximum of 30 lines.}
+#'}
+#'
 #' @param filename A character string. The path to a valid mtz file.
 #' @param message A logical variable. If TRUE the function prints
 #'    a message highlighting what is included in the mtz header.
 #'    Default value is \code{message=FALSE}.
 #' @return A named list. Each name correspond to a valid field in the mtz
-#'    header.
+#'    header (see details).
 #' @examples
 #' datadir <- system.file("extdata",package="cry")
-#' filename <- file.path(datadir,"insulin_merged.mtz")
+#' filename <- file.path(datadir,"1dei_phases.mtz")
 #' ltmp <- readMTZHeader(filename)
 #' print(names(ltmp))
 #' print(ltmp$CELL)
 #' print(ltmp$SYMM)
+#'
 #' @export
 readMTZHeader <- function(filename,message=FALSE)
 {
@@ -39,9 +105,12 @@ readMTZHeader <- function(filename,message=FALSE)
   # Work out how many reflection records are contained in this MTZ file (= nref X ncols)
   numDataItems <- irdata[[2]] - 20 - 1
 
-  # Load all reflection records (only use here is for getting to the right point of binary file)
-  if (irdata[[3]] == 1) reflnData <- readBin(f, "numeric", n=numDataItems, size=4)
-  if (irdata[[3]] == -1) reflnData <- readBin(f, "numeric", n=numDataItems, size=4,endian="big")
+  # Load all reflection records (only use here is
+  # for getting to the right point of binary file)
+  if (irdata[[3]] == 1)
+    reflnData <- readBin(f, "numeric", n=numDataItems, size=4)
+  if (irdata[[3]] == -1)
+    reflnData <- readBin(f, "numeric", n=numDataItems, size=4,endian="big")
 
   # Load header information
   hData <- .readH(f,message)
@@ -74,7 +143,9 @@ readMTZHeader <- function(filename,message=FALSE)
 #'         with the name of the corresponding column in the mtz.
 #'         The second element is called "header" and is a named
 #'         list in which each name correspond to a valid field
-#'         in the mtz header. The third element is called
+#'         in the mtz header (see details in
+#'         \code{\link{readMTZHeader}}).
+#'         The third element is called
 #'         "batch_header" and is a list with as many elements as
 #'         the number of batches (images) included in the mtz
 #'         file. Each list element is, itself, a named list
@@ -84,7 +155,7 @@ readMTZHeader <- function(filename,message=FALSE)
 #' @examples
 #'
 #' datadir <- system.file("extdata",package="cry")
-#' filename <- file.path(datadir,"insulin_merged.mtz")
+#' filename <- file.path(datadir,"1dei_phases.mtz")
 #' ltmp <- readMTZ(filename)
 #' print(names(ltmp))
 #' print(class(ltmp$reflections))
@@ -98,15 +169,6 @@ readMTZHeader <- function(filename,message=FALSE)
 #'
 #' @export
 readMTZ <- function(filename,message=FALSE) {
-  ################################################################################
-  ## a function for reading an MTZ file                                         ##
-  ## N.B. assumes 4 bytes per data item, not sure if this is always true        ##
-  ##                                                                            ##
-  ## David Waterman and James Foadi. Diamond Light Source and Imperial College. ##
-  ## Started off by David Waterman in June 2009.                                ##
-  ## Extended by James Foadi in July 2009                                       ##
-  ################################################################################
-
   # Create a connection to binary file
   f <- file(filename, open="rb")
 
@@ -115,7 +177,8 @@ readMTZ <- function(filename,message=FALSE) {
   errF <- irdata[[1]]
   if (errF != 0) stop("readMTZ: MTZ binary file does not contain initial \"MTZ \" tag. It is either a badly formatted or a wrong MTZ file.")
 
-  # Work out how many reflection records are contained in this MTZ file (= nref X ncols)
+  # Work out how many reflection records are contained
+  # in this MTZ file (= nref X ncols)
   numDataItems <- irdata[[2]] - 20 - 1
 
   # Load all reflection records
@@ -128,10 +191,11 @@ readMTZ <- function(filename,message=FALSE) {
 
   # Load header information
   hData <- .readH(f,message)
-  hF <- hData[[2]]                                    # hF == 1 means no batch headers
+  hF <- hData[[2]]            # hF == 1 means no batch headers
+
   # Turn reflnData into a dataframe where columns are named
   tmpmatrix <- matrix(data=reflnData,nrow=hData[[1]]$NCOL[2],ncol=hData[[1]]$NCOL[1],
-                      byrow=TRUE,dimnames=list(NULL,hData[[1]]$COLUMN$labels))
+  byrow=TRUE,dimnames=list(NULL,hData[[1]]$COLUMN$labels))
   tmpdataframe <- as.data.frame(tmpmatrix)
   reflnData <- tmpdataframe
   rm(tmpmatrix,tmpdataframe)
@@ -180,78 +244,8 @@ readMTZ <- function(filename,message=FALSE) {
 #'                    \code{\link{readMTZ}}.
 #' @param header A list whose components are other R objects. This
 #'               is normally derived from the reading of another
-#'               MTZ file using \code{\link{readMTZ}}. The fields
-#'               available are:
-#'               \describe{
-#'                \item{NCOL}{Number of columns in data frame
-#'                            \code{reflections}.}
-#'                \item{CELL}{A numeric vector of length 6,
-#'                            containing the unit cell parameters.}
-#'                \item{SORT}{An integer vector of length 5,
-#'                            containing the sort order of the
-#'                            first 5 columns of data.}
-#'                \item{SYMINF}{Un-named list with 6 components:
-#'                              the number of symmetry operations
-#'                              (an integer), the number of
-#'                              primitive operations (an integer),
-#'                              the lattice type (a one-letter
-#'                              character), the space group number
-#'                              (an integer), the space group name
-#'                              (a 10-letter character string) and
-#'                              the point group name (a 6-letter
-#'                              character).}
-#'                \item{RESO}{Minimum and maximum data resolution,
-#'                            stored as \eqn{{1/d^2}}.}
-#'                \item{NDIF}{Number of datasets whose reflection
-#'                            data are present in the file.}
-#'                \item{SYMM}{A character vector whose length
-#'                            depends on the type of symmetry. It
-#'                            describes the symmetry operations in
-#'                            human-readable format, International
-#'                            Tables style. Each string is
-#'                            80 characters long.}
-#'                \item{PROJECT}{A data frame whose rows provide an
-#'                               ID and a name (called "pname") for
-#'                               the projects for which the data
-#'                               contained have been produced.}
-#'                \item{CRYSTAL}{A data frame whose rows provide an
-#'                               ID and a name (called "pname") for
-#'                               the crystals for which the data
-#'                               contained have been produced.}
-#'                \item{DATASET}{A data frame whose rows provide an
-#'                               ID and a name (called "pname") for
-#'                               the datasets included in the
-#'                               reflections record.}
-#'                \item{DCELL}{A data frame whose rows contain the
-#'                             \code{CRYSTAL} IDs and
-#'                             cell parameters of each crystal
-#'                             that has contributed to the data in
-#'                             the reflections record.}
-#'                \item{DWAVEL}{A data frame whose rows contain
-#'                             the \code{DATASET} IDs and the
-#'                             wavelength with which the reflection
-#'                             data were collected.}
-#'                \item{COLUMN}{A data frame describing the type of
-#'                              data included in the reflections
-#'                              record. The data frame includes the
-#'                              labels for each column, the dtype
-#'                              (see \code{\link{merged_reflections}})
-#'                              for each column, min and max values and
-#'                              the \code{DATASET} ID.}
-#'                \item{COLSRC}{A data frame with three columns. The
-#'                              first includes the labels of each
-#'                              reflections record column. The second
-#'                              includes a time stamp of when each data
-#'                              column was created. The third is the
-#'                              dataset ID as a string.}
-#'                \item{COLGRP}{A character string vector where each
-#'                              component is an 80-letters string
-#'                              describing the name and type of data.}
-#'                \item{HISTORY}{A character string vector of variable
-#'                               length. Each component is an 80-letter
-#'                               string summarising the steps that lead
-#'                               to the curren reflections record.}
-#'               }
+#'               MTZ file using \code{\link{readMTZ}}. See further
+#'               details at \code{\link{readMTZHeader}}.
 #' @param batch_header A named list including information at data
 #'                     collection time. This component is present
 #'                     only for raw (unmerged) intensity data
@@ -268,37 +262,37 @@ readMTZ <- function(filename,message=FALSE) {
 #' @param title A character string. The character string
 #'              associated with the TITLE keyword in an MTZ file.
 #'              This feature makes it easy to quickly identify the
-#'              data file in
-#'              \href{http://www.ccp4.ac.uk}{CCP4} programs, but it
-#'              is not directly used in \code{cry}.
+#'              data file in \href{http://www.ccp4.ac.uk}{CCP4}
+#'              programs. Default (NULL) is for the output file
+#'              to have the same title as the input file.
 #' @return A logical variable. If TRUE, the function has written
 #'         a successful MTZ file.
 #'
 #' @examples
-#' # Read the insulin data included in the package
+#' # Read the 1dei_phases data included in the package
 #' datadir <- system.file("extdata",package="cry")
-#' filename <- file.path(datadir,"insulin_merged.mtz")
-#' lmtz <- readMTZ(filename)
+#' filename <- file.path(datadir,"1dei_phases.mtz")
+#' lMTZ <- readMTZ(filename)
 #'
 #' # Change dataset name
-#' print(lmtz$header$DATASET)
-#' lmtz$header$DATASET[2,2] <- "New CRY dataset"
+#' print(lMTZ$header$DATASET)
+#' lMTZ$header$DATASET[2,2] <- "New CRY dataset"
 #'
 #' # Add one HISTORY line (string has to be 80-letters long)
 #' addhist <- "From CRY 0.3.0 - run on Apr 2 20:12:00 2021"
 #' n <- nchar(addhist)
 #' nblanks <- 80-n
 #' for (i in 1:nblanks) addhist <- paste0(addhist," ")
-#' lmtz$header$HISTORY <- c(lmtz$header$HISTORY,addhist)
+#' lMTZ$header$HISTORY <- c(lMTZ$header$HISTORY,addhist)
 #'
 #' # Write to a new MTZ file
 #' wd <- tempdir()
 #' fname <- file.path(wd,"new.mtz")
-#' writeMTZ(lmtz$reflections,lmtz$header,fname)
+#' writeMTZ(lMTZ$reflections,lMTZ$header,fname)
 #'
 #' @export
 writeMTZ <- function(reflections,header,filename,
-                     title="Generated from CRY",
+                     title=NULL,
                      batch_header=NULL){
   # Create a connection to binary file
   f <- file(filename, open="wb")
@@ -320,14 +314,16 @@ writeMTZ <- function(reflections,header,filename,
   #headerLoc <- 80+data_length*4+1
   headerLoc <- data_length+20+1
   storage.mode(headerLoc) <- "integer"  # Turn headerLoc into
-  # integer for correct
-  # binary storage
+                                        # integer for correct
+                                        # binary storage
   writeBin(headerLoc,f,size=4)
 
   # Machine stamp (to be improved)
   machineStamp <- "DA"
   writeChar(machineStamp,f,nchars=2)
 
+  # To get to "DA" we have used 8+2 bytes. Reflections will be
+  # written starting from byte 81. So we need to add 70 bytes.
   # Fill with NULLs for 69 bytes (2 to complete machine stamp,
   # plus 68 to get to a total of 80. We write one less as this
   # is automatically added when connection is closed)
@@ -344,7 +340,8 @@ writeMTZ <- function(reflections,header,filename,
   # Build header 80-characters lines and write to binary file
   fullhdata <- ""
   hdata <- "VERS MTZ:V1.1                                                                   "
-  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # MTZ stamp
+  fullhdata <- paste(fullhdata,hdata,sep="") # MTZ stamp
+  if (is.null(title)) title <- header$TITLE
   hdata <- paste("TITLE",title)
   nblanks <- 80-nchar(hdata)
   for (i in 1:nblanks) hdata <- paste(hdata," ",sep="")
@@ -378,21 +375,42 @@ writeMTZ <- function(reflections,header,filename,
                    header$RESO[1],header$RESO[2])
   fullhdata <- paste(fullhdata,hdata,sep="")                                                  # RESO
   hdata <- "VALM NAN                                                                        "
-  fullhdata <- paste(fullhdata,hdata,sep="")                                                  # VALM
+  fullhdata <- paste(fullhdata,hdata,sep="")  # VALM
+
+  # Complex part of header COLUMN+COLSRC+COL
   for (i in 1:length(header$COLUMN[,1])) {
-    linea <- c()
-    linea <- c(linea,header$COLUMN$labels[i],
-               header$COLUMN$types[i],
-               header$COLUMN$min[i],
-               header$COLUMN$max[i],
-               header$COLUMN$id[i])
-    hdata <- sprintf("COLUMN %-31s%1s%18s%18s  %3s",
-                     linea[1],linea[2],linea[3],linea[4],linea[5])
-    fullhdata <- paste(fullhdata,hdata,sep="")                                                 # COLUMN
+    linea1 <- header$COLUMN$labels[i]
+    linea2 <- header$COLUMN$types[i]
+    linea5 <- as.numeric(header$COLUMN$id[i])
+    # String depends on type of data
+    if (header$COLUMN$types[i] == "H" |
+        header$COLUMN$types[i] == "P" |
+        header$COLUMN$types[i] == "B" |
+        header$COLUMN$types[i] == "Y" |
+        header$COLUMN$types[i] == "I") {
+    linea3 <- as.integer(header$COLUMN$min[i])
+    linea4 <- as.integer(header$COLUMN$max[i])
+    hdata <- sprintf("COLUMN  %-30s%1s  %16d  %16d  %3d",
+            linea1,linea2,linea3,linea4,linea5)
+    } else {
+      linea3 <- as.numeric(header$COLUMN$min[i])
+      linea4 <- as.numeric(header$COLUMN$max[i])
+      hdata <- sprintf("COLUMN  %-30s%1s  %16.3f  %16.3f  %3d",
+            linea1,linea2,linea3,linea4,linea5)
+    }
+    #print(hdata)
+    fullhdata <- paste0(fullhdata,hdata)    # COLUMN
+    linea1 <- header$COLSRC$labels[i]
+    linea2 <- header$COLSRC$created[i]
+    linea3 <- as.numeric(header$COLSRC$id[i])
+    hdata <- sprintf("COLSRC %-31s%27s %14d",
+            linea1,linea2,linea3)
+    #print(hdata)
+    fullhdata <- paste0(fullhdata,hdata)    # COLSRC
   }
   hdata <- sprintf("NDIF %8d                                                                   ",
                    header$NDIF)
-  fullhdata <- paste(fullhdata,hdata,sep="")                                                    # NDIF
+  fullhdata <- paste(fullhdata,hdata,sep="") # NDIF
   for (i in 1:header$NDIF) {
     hdata <- sprintf("PROJECT%8d %-64s",
      header$PROJECT$id[i],header$PROJECT$pname[i])
@@ -423,13 +441,14 @@ writeMTZ <- function(reflections,header,filename,
     hdata <- sprintf("BATCH ")
     if (plength >= 12) {
       for (i in istart:iend) hdata <- paste(hdata,
-                                            sprintf("%6d",header$BATCH[i]),sep="")
+                  sprintf("%6d",header$BATCH[i]),sep="")
       hdata <- paste(hdata,sprintf("  "),sep="")
       fullhdata <- paste(fullhdata,hdata,sep="")
     }
     if (plength < 12) {
-      for (i in istart:length(header$BATCH)) hdata <- paste(hdata,
-                                                            sprintf("%6d",header$BATCH[i]),sep="")
+      for (i in istart:length(header$BATCH))
+        hdata <- paste(hdata,sprintf("%6d",header$BATCH[i]),
+                       sep="")
       iend <- 12-rem
       for (i in 1:iend) hdata <- paste(hdata,
                                        sprintf("      "),sep="")
@@ -442,14 +461,16 @@ writeMTZ <- function(reflections,header,filename,
   fullhdata <- paste(fullhdata,hdata,sep="")
   #hdata <- sprintf("MTZHIST%4d                                                                     ",(length(data[[2]]$HISTORY)-1))
   #fullhdata <- paste(fullhdata,hdata,sep="")
-  for (i in 1:length(header$HISTORY)) {
-    hdata <- header$HISTORY[i]
-    fullhdata <- paste(fullhdata,hdata,sep="")                                                # HISTORY
+  if (!is.null(header$HISTORY)) {
+    for (i in 1:length(header$HISTORY)) {
+      hdata <- header$HISTORY[i]
+      fullhdata <- paste(fullhdata,hdata,sep="")                                                # HISTORY
+    }
   }
 
   # End of MTZ or beginning of batch headers
   if (header$NCOL[3] == 0) {
-    hdata <- sprintf("MTZENDOFHEADERS                                                                 ")
+  hdata <- sprintf("MTZENDOFHEADERS                                                                 ")
     fullhdata <- paste(fullhdata,hdata,sep="")
     writeChar(fullhdata,f,eos=NULL)
 
@@ -586,7 +607,7 @@ writeMTZ <- function(reflections,header,filename,
 #'  \code{mids}, \code{ave} and \code{sd} correspond to inverse resolutions.
 #' @examples
 #' datadir <- system.file("extdata",package="cry")
-#' filename <- file.path(datadir,"insulin_merged.mtz")
+#' filename <- file.path(datadir,"1dei_phases.mtz")
 #' lmtz <- readMTZ(filename)
 #' hkl <- lmtz$reflections[,1:3]
 #' II <- lmtz$reflections[,4]
@@ -668,8 +689,11 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
   # containing the individual words composing the string.
   blanks <- "[[:blank:]]+"
   ltmp <- strsplit(stringa,blanks)
-
-  return(ltmp[[1]])
+  if (length(ltmp) > 0) {
+    return(ltmp[[1]])
+  } else {
+    return(ltmp)
+  }
 }
 
 
@@ -706,16 +730,17 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
     }
   }
 
-  # Location of start for data records. If subsequently-read machineStamp
-  # is not "DA", then use big endian
+  # Location of start for data records. If subsequently-read
+  # machineStamp is not "DA", then use big endian
   edn <- 1
   headerLoc <- readBin(f,"integer",n=1,size=4)
 
   # Machine stamp
-  machineStamp <- readChar(f,4) # number formats of the architecture f was
-  # written on
+  machineStamp <- readChar(f,4) # number formats of the
+                                # architecture f was written on
 
-  # If machineStamp != "DA" re-read headerLoc with big endian and change edn into -1
+  # If machineStamp != "DA" re-read headerLoc with big endian
+  # and change edn into -1
   if (machineStamp != "DA")
   {
     seek(f,4)
@@ -723,8 +748,8 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
     edn <- -1
   }
 
-  # Prepare for data records reading: pPosition connection at beginning
-  # of reflection data (21st byte=4*20+1)
+  # Prepare for data records reading: pPosition connection
+  # at beginning of reflection data (21st byte=4*20+1)
   seek(f,80)
 
   return(list(errF=errF,headerLoc=headerLoc,edn=edn))
@@ -756,7 +781,8 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
   d_project <- data.frame(id=1,pname=NA)
   d_crystal <- data.frame(id=1,cname=NA)
   d_dataset <- data.frame(id=1,dname=NA)
-  d_dcell <- data.frame(id=1,a=NA,b=NA,c=NA,alpha=NA,beta=NA,gamma=NA)
+  d_dcell <- data.frame(id=1,a=NA,b=NA,c=NA,
+                        alpha=NA,beta=NA,gamma=NA)
   d_dwavel <- data.frame(id=1,lambda=NA)
   col_batch <- c()
   l_data <- list()
@@ -769,6 +795,14 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
     endTag <- fields[1]
 
     # Distribute values according to keyword
+    if (endTag == "TITLE") {
+      stmp <- ""
+      for (i in 2:length(fields)) {
+        stmp <- paste(stmp,fields[i])
+      }
+      stmp <- trimws(stmp,"both")
+      l_data$TITLE <- stmp
+    }
     if (endTag == "NCOL") l_data$NCOL <- c(as.integer(fields[2]),           # Number of columns
                                            as.integer(fields[3]),           # Number of reflection records
                                            as.integer(fields[4]))           # Number of batches
@@ -791,7 +825,9 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
       {
         if (substr(hdata,i,i) == "'") cplace <- c(cplace,i)
       }
-      if (length(cplace) != 0 & length(cplace) != 2 & length(cplace) != 4) stop("Wrongly formatted SYMINF line in header")
+      if (length(cplace) != 0 & length(cplace) != 2 &
+          length(cplace) != 4)
+           stop("Wrongly formatted SYMINF line in header")
       if (length(cplace) == 0)
       {
         sgname <- fields[length(fields)-1]
@@ -885,6 +921,7 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
       col_batch <- c(col_batch,as.integer(fields[2:length(fields)]))
     }
   }
+
   l_data$SYMM <- col_symm
   if (length(d_project[,1]) != 1) d_project <- na.omit(d_project)
   rownames(d_project) <- 1:length(d_project[,1])
@@ -906,12 +943,15 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
   rownames(d_dwavel) <- 1:length(d_dwavel[,1])
   l_data$DWAVEL <- d_dwavel
 
-  # The .I_null_check() avoids values being turned into factor levels
-  l_data$COLUMN <- data.frame(labels=.I_null_check(col_labels),types=.I_null_check(col_types),
-                              min=.I_null_check(col_min),max=.I_null_check(col_max),
+  # The .I_null_check() avoids values being turned into factor
+  # levels
+  l_data$COLUMN <- data.frame(labels=.I_null_check(col_labels),
+                              types=.I_null_check(col_types),
+                              min=.I_null_check(col_min),
+                              max=.I_null_check(col_max),
                               id=.I_null_check(col_id))
   l_data$COLSRC <- data.frame(labels=.I_null_check(colsrc_labels),
-                              created=.I_null_check(colsrc_created),
+                    created=.I_null_check(colsrc_created),
                               id=.I_null_check(colsrc_id))
   l_data$COLGRP <- colgrp
 
@@ -920,13 +960,18 @@ avei_vs_res <- function(nbin,resos,II=NULL,m=max(resos),M=min(resos))
   # History
   col_history <- c()
   bheaderTag=" "
-  while (bheaderTag != "MTZBATS" & bheaderTag != "MTZENDOFHEADERS")
+  while (bheaderTag != "MTZBATS" &
+         bheaderTag != "MTZENDOFHEADERS")
   {
     hdata <- readChar(f,80)
     col_history <- c(col_history,hdata)
     bheaderTag <- .tagRead(hdata)[1]
   }
-  l_data$HISTORY <- col_history[1:(length(col_history)-1)]
+  if (substr(col_history[1],1,6) != "MTZEND") {
+   l_data$HISTORY <- col_history[1:(length(col_history)-1)]
+  } else {
+    l_data$HISTORY <- NULL
+  }
 
   if (bheaderTag == "MTZENDOFHEADERS")
   {
@@ -3447,4 +3492,56 @@ sysabs  <- function(hkl,SG) {
   idx <- which(complete.cases(hkl))
 
   return(idx)
+}
+
+#' Change COLSRC date and time stamp
+#'
+#' Function to update the \code{created} column of the data
+#' frame \code{COLSRC} with current date and time.
+#'
+#' The COLSRC data frame of an MTZ header has a column called
+#' \code{created} which displays the date and time at which the
+#' MTZ file data columns were created. When writing out a
+#' modified list obtained from reading an MTZ file, one might
+#' want to change the \code{created} column with the current
+#' date and time. Other specific types of change can be operated
+#' by handling the \code{COLSRC} data frame in an *ad hoc* manner.
+#'
+#' @param hdr A data frame. The \code{COLSRC} data frame included
+#'            in the \code{header} component of the named list
+#'            obtained with \code{\link{readMTZ}} or
+#'            \code{\link{readMTZHeader}}.
+#' @return The \code{hdr} input data frame with the \code{created}
+#'         column of the \code{COLSRC} data frame changed to
+#'         display the current date and time.
+#'
+#' @examples
+#' # Read a sample MTZ file
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"1dei_phases.mtz")
+#' lMTZ <- readMTZ(filename)
+#'
+#' # Original COLSRC
+#' print(lMTZ$header$COLSRC)
+#'
+#' # Update date and time stamp
+#' lMTZ$header <- change_COLSRC(lMTZ$header)
+#'
+#' # New COLSRC
+#' print(lMTZ$header$COLSRC)
+#'
+#' @export
+change_COLSRC <- function(hdr) {
+  # Get date and time from system
+  tt <- strsplit(as.character(Sys.time())," ")[[1]]
+  ss <- strsplit(tt[1],"-")[[1]]
+  g <- paste0(ss[3],"/",ss[2],"/",ss[1])
+  stmp <- paste0("CREATED_",g,"_",tt[2])
+
+  # Change 'created' field of COLSRC
+  for (i in 1:length(hdr$COLSRC[,1])) {
+    hdr$COLSRC[i,2] <- stmp
+  }
+
+  return(hdr)
 }

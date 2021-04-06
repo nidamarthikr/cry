@@ -41,7 +41,7 @@ Binning is done with inverse resolutions in order to have lower resolutions
 }
 \examples{
 datadir <- system.file("extdata",package="cry")
-filename <- file.path(datadir,"insulin_merged.mtz")
+filename <- file.path(datadir,"1dei_phases.mtz")
 lmtz <- readMTZ(filename)
 hkl <- lmtz$reflections[,1:3]
 II <- lmtz$reflections[,4]

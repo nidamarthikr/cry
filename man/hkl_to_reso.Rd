@@ -33,7 +33,7 @@ Calculates resolution, given the Miller indices
 }
 \examples{
 datadir <- system.file("extdata",package="cry")
-fname <- file.path(datadir,"insulin_merged.mtz")
+fname <- file.path(datadir,"1dei_phases.mtz")
 hdr <- readMTZHeader(fname,message=FALSE)
 ucell <- hdr$CELL
 reso1 <- hkl_to_reso(1,0,0,ucell[1],ucell[2],ucell[3],ucell[4],ucell[5],ucell[6])

@@ -15,16 +15,81 @@ Default value is \code{message=FALSE}.}
 }
 \value{
 A named list. Each name correspond to a valid field in the mtz
-   header.
+   header (see details).
 }
 \description{
-Reads and output an MTZ header
+An MTZ file is a binary file created to carry information on
+x-ray diffraction experiments on crystals. It includes x-ray
+diffraction data and information on the experiment and the
+crystal.
+}
+\details{
+The function returns a named list whose components are
+the \code{reflections}, the \code{header} and the
+\code{batch_header}. The \code{header} is a named list whose
+components are:
+\describe{
+  \item{TITLE}{A character string containing the title of the
+               MTZ file.}
+  \item{NCOL}{Number of columns in data frame
+   \code{reflections}.}
+  \item{CELL}{A numeric vector of length 6, containing the
+   unit cell parameters.}
+  \item{SORT}{An integer vector of length 5, containing the
+   sort order of the first 5 columns of data.}
+  \item{SYMINF}{Un-named list with 6 components: the number
+   of symmetry operations (an integer), the number of
+   primitive operations (an integer), the lattice type
+   (a one-letter character), the space group number (an
+   integer), the space group name (a 10-letter character
+   string) and the point group name (a 6-letter character).}
+  \item{RESO}{Minimum and maximum data resolution, stored as
+   \eqn{{1/d^2}}.}
+  \item{NDIF}{Number of datasets whose reflection data are
+   present in the file.}
+  \item{SYMM}{A character vector whose length depends on the
+   type of symmetry. It describes the symmetry operations in
+   human-readable format, International Tables style. Each
+   string is 80 characters long.}
+  \item{PROJECT}{A data frame whose rows provide an ID and a
+   name (called "pname") for the projects for which the data
+   contained have been produced.}
+  \item{CRYSTAL}{A data frame whose rows provide an ID and a
+   name (called "pname") for the crystals for which the data
+   contained have been produced.}
+  \item{DATASET}{A data frame whose rows provide an ID and a
+   name (called "pname") for the datasets included in the
+   reflections record.}
+  \item{DCELL}{A data frame whose rows contain the
+   \code{CRYSTAL} IDs and cell parameters of each crystal
+   that has contributed to the data in the reflections record.}
+  \item{DWAVEL}{A data frame whose rows contain the
+   \code{DATASET} IDs and the wavelength with which the
+    reflection data were collected.}
+  \item{COLUMN}{A data frame describing the type of data
+   included in the reflections record. The data frame includes
+   the labels for each column, the dtype (see
+   \code{\link{merged_reflections}}) for each column, min and
+   max values and the \code{DATASET} ID.}
+  \item{COLSRC}{A data frame with three columns. The first
+   includes the labels of each reflections record column. The
+   second includes a time stamp of when each data column was
+   created. The third is the dataset ID as a string.}
+  \item{COLGRP}{A character string vector where each component
+   is an 80-letters string describing the name and type of
+   data.}
+  \item{HISTORY}{A character string vector of variable length.
+   Each component is an 80-letter string summarising the steps
+   that lead to the curren reflections record. HISTORY can
+   contain a maximum of 30 lines.}
+}
 }
 \examples{
 datadir <- system.file("extdata",package="cry")
-filename <- file.path(datadir,"insulin_merged.mtz")
+filename <- file.path(datadir,"1dei_phases.mtz")
 ltmp <- readMTZHeader(filename)
 print(names(ltmp))
 print(ltmp$CELL)
 print(ltmp$SYMM)
+
 }
