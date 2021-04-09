@@ -32,7 +32,7 @@ mathematically by the following matrix and vector:
   1/2 \\
   0 \\
   1/2
-  \end{array}\rigt)
+  \end{array}\right)
 }
 Where symmetry operations in human-readable form are useful for the subjective reasoning
 in crystallography, their mathematical counterpart is needed for all practical calculations.
