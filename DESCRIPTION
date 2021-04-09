@@ -25,5 +25,3 @@ Imports:
 Suggests: 
     knitr,
     rmarkdown
-Remotes:
-    rstudio/rmarkdown
