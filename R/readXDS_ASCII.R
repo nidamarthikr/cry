@@ -25,11 +25,11 @@
 #' # this distribution of cry
 #' datadir <- system.file("extdata",package="cry")
 #' filename <- file.path(datadir,"xds00_ascii.hkl")
-#' ltmp <- readXDS_ASCII_Header(filename)
+#' ltmp <- readXDS_ASCIIHeader(filename)
 #' print(names(ltmp))
 #'
 #' @export
-readXDS_ASCII_Header <- function(filename) {
+readXDS_ASCIIHeader <- function(filename) {
   # Open file connection
   ff <- file(filename)
 
@@ -541,7 +541,7 @@ readXDS_ASCII_Header <- function(filename) {
 #' @export
 readXDS_ASCII <- function(filename,message =FALSE) {
   # Read header first
-  lXDS <- readXDS_ASCII_Header(filename)
+  lXDS <- readXDS_ASCIIHeader(filename)
 
   # Column names
   cnames <- lXDS$header$RECORD_NAMES
@@ -572,4 +572,461 @@ readXDS_ASCII <- function(filename,message =FALSE) {
   }
 
   return(lXDS)
+}
+
+
+#' Write data to an XDS_ASCII file.
+#'
+#' Function to write an XDS_ASCII-tye named list to a file with
+#' XDS_ASCII format (unmerged or merged).
+#'
+#' The XDS_ASCII-type named list includes three components,
+#' \code{processing_info}, \code{header} and \code{reflections}
+#' (see \code{\link{readXDS_ASCII}}).
+#'
+#' @param filename A character string. The path to a valid
+#'                 XDS ASCII file.
+#'
+#' @param proc_info The first component of an XDS_ASCII-type
+#'                  object. It includes up to three
+#'                  components, \code{MERGE}, \code{FRIEDEL}
+#'                  and \code{PROFILE_FITTING} (this last
+#'                  component is missing for files with
+#'                  merged observations, obtained with the
+#'                  program XSCALE).
+#' @param header The second component of an XDS_ASCII-type object.
+#'               This object includes several other objects (see
+#'               \code{\link{readXDS_ASCII}}).
+#' @param reflections The third component of an XDS_ASCII-type
+#'                    object. It contains the data (the
+#'                    experimental observations). See
+#'                    \code{\link{readXDS_ASCII}} for more details.
+#' @param filename A character string. The path to a valid
+#'                 XDS_ASCII file. If a file with the same name
+#'                 exists, it will be deleted.
+#' @return This function does not return any R object. It outputs
+#'         an XDS_ASCII reflection file to some target location.
+#'
+#' @examples
+#'
+#' # Load one of the XDS ASCII files included with
+#' # this distribution of cry
+#' datadir <- system.file("extdata",package="cry")
+#' filename <- file.path(datadir,"xds00_ascii.hkl")
+#' lXDS <- readXDS_ASCII(filename)
+#'
+#' # Change date
+#' print(lXDS$header$DATE)
+#' lXDS$header$DATE <- "7-Apr-2021"
+#'
+#' # Write to a file called "new.hkl"
+#' wd <- tempdir()
+#' fname <- file.path(wd,"new.hkl")
+#' writeXDS_ASCII(lXDS$processing_info,lXDS$header,
+#'                lXDS$reflections,fname)
+#'
+#' @export
+writeXDS_ASCII <- function(proc_info,header,
+                           reflections,filename) {
+  ### 1) proc_info
+  # Check inputs are lists, a data frame and a character string
+  if (!is.list(proc_info)) {
+    stop("Input 'proc_info' is a named list.")
+  }
+  if (!is.list(header)) {
+    stop("Input `header' is a named list")
+  }
+  if (!is.data.frame(reflections)) {
+    stop("Input 'reflections' is a data frame.")
+  }
+  if (!is.character(filename)) {
+    stop("Input 'filename' is a character string, a file name.")
+  }
+
+  # Check proc_info is a list with two or three
+  # Proper proc_info
+  names_proc <- names(proc_info)
+  if (names_proc[1] != "MERGE" | names_proc[2] != "FRIEDEL") {
+    stop("Wrongly formed 'proc_info'.")
+  }
+  if (length(names_proc) == 3 &
+      names_proc[3] != "PROFILE_FITTING") {
+    stop("Wrongly formed 'proc_info'.")
+  }
+
+  ### 2) header
+  # Names check
+  known_names <- c("NAME_TEMPLATE_OF_DATA_FRAMES",
+                   "GENERATED_BY",
+                   "DATE",
+                   "DATA_RANGE",
+                   "ROTATION_AXIS",
+                   "OSCILLATION_RANGE",
+                   "STARTING_ANGLE",
+                   "STARTING_FRAME",
+                   "INCLUDE_RESOLUTION_RANGE",
+                   "SPACE_GROUP_NUMBER",
+                   "UNIT_CELL_CONSTANTS",
+                   "UNIT_CELL_AAXIS",
+                   "UNIT_CELL_BAXIS",
+                   "UNIT_CELL_CAXIS",
+                   "REFLECTING_RANGE_E.S.D.",
+                   "BEAM_DIVERGENCE_E.S.D.",
+                   "XRAY_WAVELENGTH",
+                   "INCIDENT_BEAM_DIRECTION",
+                   "FRACTION_OF_POLARIZATION",
+                   "POLARIZATION_PLANE_NORMAL",
+                   "AIR",
+                   "SILICON",
+                   "SENSOR_THICKNESS",
+                   "DETECTOR",
+                   "OVERLOAD",
+                   "NX_NY_QX_QY",
+                   "ORGX_ORGY",
+                   "DETECTOR_DISTANCE",
+                   "DIRECTION_OF_DETECTOR_XAXIS",
+                   "DIRECTION_OF_DETECTOR_YAXIS",
+                   "VARIANCE_MODEL",
+                   "RECORD_NAMES")
+  # header names
+  hdr_names <- names(header)
+
+  # Are there more than known names? Then stop
+  n_known_names <- length(known_names)
+  n_hdr_names <- length(hdr_names)
+  if (n_hdr_names > n_known_names) {
+    stop("Wrongly formed 'header'.")
+  }
+
+  # Open file and write stuff in
+  if (file.exists(filename)) emptyc <- file.remove(filename)
+  bigLines <- c()
+  ## Unmerged files ##
+  if (!proc_info$MERGE){
+    # LINE 01 - FORMAT
+    linea <- paste0(
+     sprintf("!FORMAT=XDS_ASCII    MERGE=%s",proc_info$MERGE),
+     sprintf("    FRIEDEL's_LAW=%s\n",proc_info$FRIEDEL))
+    bigLines <- c(bigLines,linea)
+    # LINE 02 - OUTPUT_FILE
+    if (!is.null(header$DATE)) {
+      linea <-
+       sprintf("!OUTPUT_FILE=%s        DATE=%s\n",
+               filename,header$DATE)
+    } else {
+      linea <- sprintf("!OUTPUT_FILE=%s\n",filename)
+    }
+    bigLines <- c(bigLines,linea)
+    # LINE 03 - GENERATED BY
+    if (!is.null(header$GENERATED_BY)) {
+      linea <- sprintf("!Generated by %s\n",header$GENERATED_BY)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 04 - PROFILE_FITTING
+    if (!is.null(proc_info$PROFILE_FITTING)) {
+      linea <- sprintf("!PROFILE_FITTING= %s\n",
+                       proc_info$PROFILE_FITTING)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 05 - NAME TEMPLATE DATA
+    if (!is.null(header$NAME_TEMPLATE_OF_DATA)) {
+      msg <- c(sprintf("!NAME_TEMPLATE_OF_DATA_FRAMES=%s",
+       header$NAME_TEMPLATE_OF_DATA_FRAMES$NAME),
+       sprintf(" %s\n",header$NAME_TEMPLATE_OF_DATA_FRAMES$TYPE))
+      linea <- paste0(msg)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 06 - DATA RANGE
+    if (!is.null(header$DATA_RANGE)) {
+      linea <- sprintf("!DATA_RANGE=%8d%8d\n",
+                       header$DATA_RANGE[1],
+                       header$DATA_RANGE[2])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 07 - ROTATION AXIS
+    if (!is.null(header$ROTATION_AXIS)) {
+      linea <- sprintf("!ROTATION_AXIS=%10.6f%10.6f%10.6f\n",
+       header$ROTATION_AXIS[1],header$ROTATION_AXIS[2],
+       header$ROTATION_AXIS[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 08 - OSCILLATION RANGE
+    if (!is.null(header$OSCILLATION_RANGE)) {
+      linea <- sprintf("!OSCILLATION_RANGE=%10.6f\n",
+       header$OSCILLATION_RANGE)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 09 - STARTING ANGLE
+    if (!is.null(header$STARTING_ANGLE)) {
+      linea <- sprintf("!STARTING_ANGLE=%10.3f\n",
+                       header$STARTING_ANGLE)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 10 - STARTING FRAME
+    if (!is.null(header$STARTING_FRAME)) {
+      linea <- sprintf("!STARTING_FRAME=%8d\n",
+                       header$STARTING_FRAME)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 11 - INCLUDE RESOLUTION RANGE
+    if (!is.null(header$INCLUDE_RESOLUTION_RANGE)) {
+      linea <- sprintf("!INCLUDE_RESOLUTION_RANGE=%10.3f%10.3f\n",
+                  header$INCLUDE_RESOLUTION_RANGE[1],
+                  header$INCLUDE_RESOLUTION_RANGE[2])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 12 - SPACE GROUP
+    if (!is.null(header$SPACE_GROUP_NUMBER)) {
+      linea <- sprintf("!SPACE_GROUP_NUMBER=%5d\n",
+                       header$SPACE_GROUP_NUMBER)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 13 - UNIT_CELL CONSTANTS
+    if (!is.null(header$UNIT_CELL_CONSTANTS)) {
+      linea <-
+        sprintf("!UNIT_CELL_CONSTANTS=%10.3f%10.3f%10.3f%8.3f%8.3f%8.3f\n",
+                header$UNIT_CELL_CONSTANTS[1],
+                header$UNIT_CELL_CONSTANTS[2],
+                header$UNIT_CELL_CONSTANTS[3],
+                header$UNIT_CELL_CONSTANTS[4],
+                header$UNIT_CELL_CONSTANTS[5],
+                header$UNIT_CELL_CONSTANTS[6])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 14 - UNIT CELL A AXIS
+    if (!is.null(header$UNIT_CELL_AAXIS)) {
+      linea <- sprintf("!UNIT_CELL_A-AXIS=%10.3f%10.3f%10.3f\n",
+       header$UNIT_CELL_AAXIS[1],header$UNIT_CELL_AAXIS[2],
+                       header$UNIT_CELL_AAXIS[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 15 - UNIT CELL B AXIS
+    if (!is.null(header$UNIT_CELL_BAXIS)) {
+      linea <- sprintf("!UNIT_CELL_B-AXIS=%10.3f%10.3f%10.3f\n",
+       header$UNIT_CELL_BAXIS[1],header$UNIT_CELL_BAXIS[2],
+                       header$UNIT_CELL_BAXIS[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 16 - UNIT CELL C AXIS
+    if (!is.null(header$UNIT_CELL_CAXIS)) {
+      linea <- sprintf("!UNIT_CELL_C-AXIS=%10.3f%10.3f%10.3f\n",
+       header$UNIT_CELL_CAXIS[1],header$UNIT_CELL_CAXIS[2],
+                       header$UNIT_CELL_CAXIS[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 17 - REFLECTING_RANGE_E.S.D.
+    if (!is.null(header$REFLECTING_RANGE_E.S.D.)) {
+      linea <- sprintf("!REFLECTING_RANGE_E.S.D.=%10.3f\n",
+                       header$REFLECTING_RANGE_E.S.D.)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 18 - BEAM_DIVERGENCE_E.S.D.
+    if (!is.null(header$BEAM_DIVERGENCE_E.S.D.)) {
+      linea <- sprintf("!BEAM_DIVERGENCE_E.S.D.=%10.3f\n",
+                       header$BEAM_DIVERGENCE_E.S.D.)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 19 - XRAY_WAVELENGTH
+    if (!is.null(header$XRAY_WAVELENGTH)) {
+      linea <- sprintf("!X-RAY_WAVELENGTH=%10.6f\n",
+                       header$XRAY_WAVELENGTH)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 20 - INCIDENT_BEAM_DIRECTION
+    if (!is.null(header$INCIDENT_BEAM_DIRECTION)) {
+      linea <-
+       sprintf("!INCIDENT_BEAM_DIRECTION=%10.6f%10.6f%10.6f\n",
+       header$INCIDENT_BEAM_DIRECTION[1],
+       header$INCIDENT_BEAM_DIRECTION[2],
+       header$INCIDENT_BEAM_DIRECTION[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 21 - FRACTION_OF_POLARIZATION
+    if (!is.null(header$FRACTION_OF_POLARIZATION)) {
+      linea <- sprintf("!FRACTION_OF_POLARIZATION=%8.3f\n",
+                       header$FRACTION_OF_POLARIZATION)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 22 - POLARIZATION_PLANE_NORMAL
+    if (!is.null(header$POLARIZATION_PLANE_NORMAL)) {
+      linea <-
+        sprintf("!POLARIZATION_PLANE_NORMAL=%10.6f%10.6f%10.6f\n",
+                header$POLARIZATION_PLANE_NORMAL[1],
+                header$POLARIZATION_PLANE_NORMAL[2],
+                header$POLARIZATION_PLANE_NORMAL[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 23 - AIR
+    if (!is.null(header$AIR)) {
+      linea <- sprintf("!AIR=%10.6f\n",
+                       header$AIR)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 24 - SILICON
+    if (!is.null(header$SILICON)) {
+      linea <- sprintf("!SILICON=%10.6f\n",
+                       header$SILICON)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 25 - SENSOR_THICKNESS
+    if (!is.null(header$SENSOR_THICKNESS)) {
+      linea <- sprintf("!SENSOR_THICKNESS=%10.6f\n",
+                       header$SENSOR_THICKNESS)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 26 - DETECTOR
+    if (!is.null(header$DETECTOR)) {
+      linea <- sprintf("!DETECTOR=%s\n",
+                       header$DETECTOR)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 27 - OVERLOAD
+    if (!is.null(header$OVERLOAD)) {
+      linea <- sprintf("!OVERLOAD=%10d\n",
+                       header$OVERLOAD)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 28 NX, NY, QX, QY
+    if (!is.null(header$NX_NY_QX_QY)) {
+      linea <- sprintf("!NX=%6d  NY=%6d   QX=%10.6f  QY=%10.6f\n",
+       header$NX_NY_QX_QY[1],header$NX_NY_QX_QY[2],
+       header$NX_NY_QX_QY[3],header$NX_NY_QX_QY[4])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 29 ORGX ORGY
+    if (!is.null(header$ORGX_ORGY)) {
+      linea <- sprintf("!ORGX=%10.2f  ORGYY=%10.2f\n",
+       header$ORGX_ORGY[1],header$ORGX_ORGY[2])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 30 - DETECTOR_DISTANCE
+    if (!is.null(header$DETECTOR_DISTANCE)) {
+      linea <- sprintf("!DETECTOR_DISTANCE=%10.3f\n",
+                       header$DETECTOR_DISTANCE)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 31 - DIRECTION_OF_DETECTOR_XAXIS
+    if (!is.null(header$DIRECTION_OF_DETECTOR_XAXIS)) {
+      linea <-
+        sprintf("!DIRECTION_OF_DETECTOR_X-AXIS=%10.6f%10.6f%10.6f\n",
+                header$DIRECTION_OF_DETECTOR_XAXIS[1],
+                header$DIRECTION_OF_DETECTOR_XAXIS[2],
+                header$DIRECTION_OF_DETECTOR_XAXIS[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 32 - DIRECTION_OF_DETECTOR_YAXIS
+    if (!is.null(header$DIRECTION_OF_DETECTOR_XAXIS)) {
+      linea <-
+        sprintf("!DIRECTION_OF_DETECTOR_Y-AXIS=%10.6f%10.6f%10.6f\n",
+                header$DIRECTION_OF_DETECTOR_YAXIS[1],
+                header$DIRECTION_OF_DETECTOR_YAXIS[2],
+                header$DIRECTION_OF_DETECTOR_YAXIS[3])
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 33 VARIANCE_MODEL
+    if (!is.null(header$VARIANCE_MODEL)) {
+      linea <- sprintf("!VARIANCE_MODEL=  %e  %e\n",
+       header$VARIANCE_MODEL[1],header$VARIANCE_MODEL[2])
+      bigLines <- c(bigLines,linea)
+    }
+    ## Data ##
+    ncols <- length(header$RECORD_NAMES)
+    linea <- sprintf("!NUMBER_OF_ITEMS_IN_EACH_DATA_RECORD=%d\n",
+                     ncols)
+    bigLines <- c(bigLines,linea)
+    for (i in 1:ncols) {
+      linea <- sprintf("!ITEM_%s=%d\n",
+       header$RECORD_NAMES[i],i)
+      bigLines <- c(bigLines,linea)
+    }
+    linea <- "!END_OF_HEADER\n"
+    bigLines <- c(bigLines,linea)
+    nrefs <- length(reflections[,1])
+    linee <- c()
+    for (i in 1:nrefs) {
+      linea <- sprintf("%6d%6d%6d %10.3e% 10.3e %7.1f %7.1f %8.1f %7.5f %3.0f %3d %7.2f\n",
+        reflections[i,1],reflections[i,2],reflections[i,3],
+        reflections[i,4],reflections[i,5],reflections[i,6],
+        reflections[i,7],reflections[i,8],reflections[i,9],
+        reflections[i,10],reflections[i,11],reflections[i,12])
+      linee <- c(linee,linea)
+    }
+    bigLines <- c(bigLines,linee)
+    bigLines <- c(bigLines,"!END_OF_DATA")
+    writeLines(bigLines,con=filename,sep="")
+  } else {
+    ## Merged files ##
+    bigLines <- c()
+    # LINE 01 - FORMAT
+    linea <- paste0(
+      sprintf("!FORMAT=XDS_ASCII    MERGE=%s",proc_info$MERGE),
+      sprintf("    FRIEDEL's_LAW=%s\n",proc_info$FRIEDEL))
+    bigLines <- c(bigLines,linea)
+    # LINE 02 - DATE
+    if (!is.null(header$DATE)) {
+      linea <- sprintf("!DATE=%s\n",header$DATE)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 03 - GENERATED BY
+    if (!is.null(header$GENERATED_BY)) {
+      linea <- sprintf("!Generated by %s\n",header$GENERATED_BY)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 04 - OUTPUT FILE
+    linea <- sprintf("!OUTPUT_FILE=%s\n",filename)
+    bigLines <- c(bigLines,linea)
+    # LINE 05 - ISET
+    if (!is.null(header$ISET)) {
+      if (length(header$ISET) > 0) {
+        linea <- paste0("!COMPRISES THE FOLLOWING ",
+                        "SCALED INPUT FILES:\n")
+        bigLines <- c(bigLines,linea)
+        for (i in 1:length(header$ISET)) {
+          linea <- sprintf("! ISET=      %s\n",header$ISET[i])
+          bigLines <- c(bigLines,linea)
+        }
+      }
+    }
+    # LINE 06 - SPACE GROUP
+    if (!is.null(header$SPACE_GROUP_NUMBER)) {
+      linea <- sprintf("!SPACE_GROUP_NUMBER=%5d\n",
+                       header$SPACE_GROUP_NUMBER)
+      bigLines <- c(bigLines,linea)
+    }
+    # LINE 07 - UNIT_CELL CONSTANTS
+    if (!is.null(header$UNIT_CELL_CONSTANTS)) {
+      linea <-
+       sprintf("!UNIT_CELL_CONSTANTS=%10.3f%10.3f%10.3f%8.3f%8.3f%8.3f\n",
+        header$UNIT_CELL_CONSTANTS[1],
+        header$UNIT_CELL_CONSTANTS[2],
+        header$UNIT_CELL_CONSTANTS[3],
+        header$UNIT_CELL_CONSTANTS[4],
+        header$UNIT_CELL_CONSTANTS[5],
+        header$UNIT_CELL_CONSTANTS[6])
+      bigLines <- c(bigLines,linea)
+    }
+    ## Data ##
+    ncols <- length(header$RECORD_NAMES)
+    linea <- sprintf("!NUMBER_OF_ITEMS_IN_EACH_DATA_RECORD=%4d\n",
+                     ncols)
+    bigLines <- c(bigLines,linea)
+    for (i in 1:ncols) {
+      linea <- sprintf("!ITEM_%s=%d\n",
+                       header$RECORD_NAMES[i],i)
+      bigLines <- c(bigLines,linea)
+    }
+    linea <- "!END_OF_HEADER\n"
+    bigLines <- c(bigLines,linea)
+    nrefs <- length(reflections[,1])
+    linee <- c()
+    for (i in 1:nrefs) {
+      linea <- sprintf("%6d%6d%6d %10.3e% 10.3e\n",
+                       reflections[i,1],reflections[i,2],reflections[i,3],
+                       reflections[i,4],reflections[i,5])
+      linee <- c(linee,linea)
+    }
+    bigLines <- c(bigLines,linee)
+    bigLines <- c(bigLines,"!END_OF_DATA")
+    writeLines(bigLines,con=filename,sep="")
+  }
 }

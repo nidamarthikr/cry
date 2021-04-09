@@ -41,8 +41,8 @@ on this can be found at
 \href{http://www.ccp4.ac.uk}{CCP4}.)}
 }
 \value{
-A logical variable. If TRUE, the function has written
-        a successful MTZ file.
+This function does not return any R object. It outputs
+        an MTZ reflection file to some target location.
 }
 \description{
 Write reflections and experimental information

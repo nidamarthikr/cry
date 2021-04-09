@@ -1,0 +1,11 @@
+# R for travis
+
+language: R
+cache: packages
+
+before_install:
+
+addons:
+  apt:
+    update: true
+

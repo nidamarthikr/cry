@@ -265,8 +265,8 @@ readMTZ <- function(filename,message=FALSE) {
 #'              data file in \href{http://www.ccp4.ac.uk}{CCP4}
 #'              programs. Default (NULL) is for the output file
 #'              to have the same title as the input file.
-#' @return A logical variable. If TRUE, the function has written
-#'         a successful MTZ file.
+#' @return This function does not return any R object. It outputs
+#'         an MTZ reflection file to some target location.
 #'
 #' @examples
 #' # Read the 1dei_phases data included in the package

@@ -3,3 +3,7 @@
 ^doc$
 ^Meta$
 ^data-raw$
+^cran-comments\.md$
+^\.travis\.yml$
+^README\.Rmd$
+^CRAN-RELEASE$
