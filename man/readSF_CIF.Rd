@@ -4,12 +4,12 @@
 \alias{readSF_CIF}
 \title{Reads and output an CIF file}
 \usage{
-readSF_CIF(filename, messages = FALSE)
+readSF_CIF(filename, message = FALSE)
 }
 \arguments{
 \item{filename}{A character string. The path to a valid CIF file.}
 
-\item{messages}{A logical variable. If TRUE (default) the function prints
+\item{message}{A logical variable. If TRUE (default) the function prints
 a message highlighting what is included in the cif file.}
 }
 \value{

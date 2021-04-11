@@ -6,7 +6,7 @@
 #' Reads and output an CIF file
 #'
 #' @param filename A character string. The path to a valid CIF file.
-#' @param messages A logical variable. If TRUE (default) the function prints
+#' @param message A logical variable. If TRUE (default) the function prints
 #'    a message highlighting what is included in the cif file.
 #' @return A named list. Each name correspond to a valid field in the cif.
 #' @examples
@@ -18,7 +18,7 @@
 #' #print(lcif$INTRO$HM)
 #' #print(lcif$SYMM)
 #' @export
-readCIF <- function(filename, messages=FALSE){
+readCIF <- function(filename, message=FALSE){
   f <- file(filename)
   lcif <- readLines(f,warn=FALSE)
   l_list <- grep("loop_",lcif)
