@@ -19,6 +19,7 @@
 #' #print(lcif$REFL)
 #' @export
 readSF_CIF <- function(filename, message=FALSE){
+  print("helo")
   f <- file(filename)
   lcif <- readLines(f,warn=FALSE)
   l_list <- grep("loop_",lcif)
